@@ -2,6 +2,7 @@
   "name": "adminpanel",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://JDNLNTN.github.io/PASIGology-Admin",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -36,7 +37,9 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "clean": "rimraf dist",
-    "dev": "npm run clean && npm start"
+    "dev": "npm run clean && npm start",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
   "eslintConfig": {
     "extends": [
@@ -67,12 +70,7 @@
     "webpack": "^5.90.3",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.0.2"
-  },
-
-  
-      "homepage": "https://github.com/JDNLNTN/PASIGology-Admin",
-       "predeploy": "npm run build",
-       "deploy": "gh-pages -d build"
+  }
 }
 
 
