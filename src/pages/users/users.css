@@ -1,0 +1,66 @@
+.users {
+    padding: 20px;
+}
+
+.users h2 {
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.users .table {
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.users .table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.users .btn-sm {
+    margin-right: 5px;
+}
+
+.users .form-control {
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+}
+
+.users .form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.users .modal-content {
+    border-radius: 8px;
+}
+
+.users .modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.users .modal-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.users .alert {
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.users .form-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.users .form-select {
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+}
+
+.users .form-select:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+} 

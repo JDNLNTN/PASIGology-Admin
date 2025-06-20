@@ -1,0 +1,51 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+name: CreateAdminPanelReact
+description: Generate a complete admin panel using React.js with modern practices.
+
+trigger:
+  - "Create an admin panel in React"
+  - "Generate React admin dashboard"
+  - "Build admin interface with React"
+
+behavior:
+  - Use React.js (functional components only)
+  - Use Tailwind CSS for styling
+  - Use React Router v6+ for routing
+  - Use shadcn/ui components (e.g., Button, Card, Table)
+  - Use Axios or fetch for API calls
+  - Use Context API or Redux Toolkit if global state is needed
+  - Use Supabase
+
+structure:
+  - Create this folder structure:
+    - src/
+      - components/        # Reusable components like Sidebar, Navbar
+      - pages/             # Pages like Dashboard.jsx, Users.jsx
+      - layouts/           # Layout components like AdminLayout.jsx
+      - hooks/             # Custom hooks
+      - context/           # Auth or global app context
+      - App.jsx            # Main app entry with routes
+      - index.js           # ReactDOM entry
+
+features:
+  - Login and Logout page
+  - Dashboard with analytics cards (e.g., total users, activity logs)
+  - Users Page with:
+    - Table view (Name, Email, Role, Status, Actions)
+    - Search and Pagination
+    - Edit/Delete actions
+  - Roles Page with:
+    - Add/Edit/Delete roles (super_admin, content_mod)
+  - Responsive sidebar navigation
+  - Toast notifications on user actions (success/error)
+ 
+
+style:
+  - Use PascalCase for components and camelCase for variables/functions
+  - Keep the UI modern, minimal, and mobile-responsive
+  - Always Add comments to explain key parts of logic
+

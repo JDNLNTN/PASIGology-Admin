@@ -1,0 +1,107 @@
+/* Responsive table styles */
+@media (max-width: 768px) {
+    .table-responsive {
+        overflow-x: auto;
+    }
+    
+    .table td, .table th {
+        white-space: nowrap;
+    }
+    
+    .btn-link {
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Card styles */
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: none;
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    background-color: #fff;
+    border-bottom: 1px solid #eee;
+    padding: 1rem;
+}
+
+/* Button styles */
+.btn {
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Badge styles */
+.badge {
+    padding: 0.5em 0.75em;
+    font-weight: 500;
+    border-radius: 0.5rem;
+}
+
+.bg-gradient-success {
+    background: linear-gradient(45deg, #28a745, #20c997);
+}
+
+.bg-gradient-danger {
+    background: linear-gradient(45deg, #dc3545, #f72a3c);
+}
+
+/* Table styles */
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.025em;
+}
+
+.table td {
+    vertical-align: middle;
+    font-size: 0.875rem;
+}
+
+/* Text styles */
+.text-xs {
+    font-size: 0.75rem;
+}
+
+.text-sm {
+    font-size: 0.875rem;
+}
+
+/* Icon styles */
+.fas {
+    font-size: 0.875rem;
+}
+
+/* Alert styles */
+.alert {
+    margin: 1rem;
+    border-radius: 0.5rem;
+}
+
+/* Container styles */
+.container-fluid {
+    padding: 1.5rem;
+}
+
+/* Row styles */
+.row {
+    margin: 0 -0.5rem;
+}
+
+/* Column styles */
+.col-12 {
+    padding: 0 0.5rem;
+} 
