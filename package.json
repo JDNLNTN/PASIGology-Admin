@@ -2,6 +2,7 @@
   "name": "adminpanel",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://oceanblueshark.site",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -19,7 +20,6 @@
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "express": "^5.1.0",
-    "gh-pages": "^6.3.0",
     "react": "^18.2.0",
     "react-bootstrap": "^2.10.10",
     "react-chartjs-2": "^5.3.0",
@@ -35,8 +35,10 @@
     "build": "webpack --mode production",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "clean": "rimraf dist",
-    "dev": "npm run clean && npm start"
+    "clean": "rimraf build",
+    "dev": "npm run clean && npm start",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build --dotfiles --no-history"
   },
   "eslintConfig": {
     "extends": [
@@ -60,19 +62,14 @@
     "@babel/preset-env": "^7.27.2",
     "@babel/preset-react": "^7.27.1",
     "babel-loader": "^9.1.3",
+    "copy-webpack-plugin": "^13.0.0",
     "css-loader": "^6.10.0",
+    "gh-pages": "^6.3.0",
     "html-webpack-plugin": "^5.6.0",
     "rimraf": "^5.0.10",
     "style-loader": "^3.3.4",
     "webpack": "^5.90.3",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.0.2"
-  },
-
-  
-      "homepage": "https://github.com/JDNLNTN/PASIGology-Admin",
-       "predeploy": "npm run build",
-       "deploy": "gh-pages -d build"
+  }
 }
-
-
