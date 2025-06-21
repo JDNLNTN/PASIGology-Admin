@@ -2,7 +2,11 @@
   "name": "adminpanel",
   "version": "0.1.0",
   "private": true,
+<<<<<<< HEAD
   "homepage": "https://oceanblueshark.site",
+=======
+  "homepage": "https://JDNLNTN.github.io/PASIGology-Admin",
+>>>>>>> 74a553ad8f84bbca55db974f7f4dced42cf87964
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -35,10 +39,17 @@
     "build": "webpack --mode production",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
+<<<<<<< HEAD
     "clean": "rimraf build",
     "dev": "npm run clean && npm start",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build --dotfiles --no-history"
+=======
+    "clean": "rimraf dist",
+    "dev": "npm run clean && npm start",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
+>>>>>>> 74a553ad8f84bbca55db974f7f4dced42cf87964
   },
   "eslintConfig": {
     "extends": [
