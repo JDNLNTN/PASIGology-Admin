@@ -15,16 +15,25 @@ function HistoricalManage() {
   const [currentUserRole, setCurrentUserRole] = useState(null);
 
   useEffect(() => {
+    if (!tableName) {
+      setError('No table name specified in the URL.');
+      setLoading(false);
+      return;
+    }
     fetchFacts();
     fetchCurrentUserRole();
   }, [tableName]);
 
   const fetchFacts = async () => {
+    if (!tableName) {
+      setError('No table name specified.');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
       console.log('Fetching from table:', tableName);
-      
       const { data, error } = await supabase
         .from(tableName)
         .select('*')
@@ -71,6 +80,10 @@ function HistoricalManage() {
   };
 
   const handleDelete = async (id) => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this fact?')) {
       try {
         setError(null);
@@ -93,6 +106,10 @@ function HistoricalManage() {
   };
 
   const handleSave = async () => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     try {
       setError(null);
       console.log('Attempting to save to table:', tableName);
@@ -145,6 +162,10 @@ function HistoricalManage() {
   };
 
   const handleApprove = async (id) => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     try {
       setError(null);
       const { error } = await supabase
@@ -210,7 +231,7 @@ function HistoricalManage() {
                     <td>{fact.fact}</td>
                     <td>{fact.is_approved ? 'Approved' : 'Pending Approval'}</td>
                     <td>
-                      {(currentUserRole === 'super_admin' || (!fact.is_approved && currentUserRole === 'content_mod')) && (
+                      {(currentUserRole === 'super_admin') && (
                         <Button
                           variant="warning"
                           size="sm"
@@ -279,4 +300,4 @@ function HistoricalManage() {
   );
 }
 
-export default HistoricalManage; 
+export default HistoricalManage;

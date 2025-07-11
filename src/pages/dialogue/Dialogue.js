@@ -1,16 +1,19 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Table, Button } from 'react-bootstrap';
+import { useAuth } from '../../context/AuthContext';
 
 function Dialogue() {
   const navigate = useNavigate();
+  const { role: currentUserRole } = useAuth();
 
   const scenes = [
     { name: 'Introduction', path: '/dialogue/introduction-overview' },
     { name: 'Plaza Rizal', path: '/dialogue/plaza-rizal' },
-    { name: 'Dimas-alang Bakery', path: '/dialogue/dimas_alang_bakery/DimasAlangBakeryOverview' },    { name: 'City Hall', path: '/dialogue/city-hall' },
+    { name: 'Dimas-alang Bakery', path: '/dialogue/dimas_alang_bakery/DimasAlangBakeryOverview' },    
+    { name: 'City Hall', path: '/dialogue/city-hall' },
     { name: 'Bahay na Tisa', path: '/dialogue/bahay-na-tisa' },
-    { name: 'Emmaculate Conception Church', path: '/dialogue/emmaculate-conception-church-overview' },
+    { name: 'Immaculate Conception Church', path: '/dialogue/emmaculate-conception-church-overview' },
     { name: 'Pasig City Museum', path: '/dialogue/pasig-city-museum' },
     { name: 'Revolving Tower', path: '/dialogue/revolving-tower' },
     { name: 'Pasig Palengke', path: '/dialogue/pasig-palengke' },
@@ -21,16 +24,23 @@ function Dialogue() {
 
   const handleManage = (path) => {
     console.log('Navigating to:', path);
-    navigate(path);
+    navigate(path, { state: { role: currentUserRole } });
   };
 
   return (
     <div className="dialogue">
-      <h2>Dialogue</h2>
+
       <Card>
         <Card.Body>
           <Table striped bordered hover>
             <thead>
+              <tr>
+                <th colSpan={2}>
+                  <h2>Dialogue</h2>
+                 <h6>You're logged in as {String(currentUserRole)}</h6>
+
+                </th>
+              </tr>
               <tr>
                 <th>Scene</th>
                 <th>Action</th>
@@ -42,7 +52,7 @@ function Dialogue() {
                   <td>{scene.name}</td>
                   <td>
                     {(scene.name === 'Dimas-alang Bakery' ||
-                      scene.name === 'Emmaculate Conception Church' ||
+                      scene.name === 'Immaculate Conception Church' ||
                       scene.name === 'Introduction') ? (
                       <Button 
                         variant="primary" 
@@ -65,4 +75,4 @@ function Dialogue() {
   );
 }
 
-export default Dialogue; 
+export default Dialogue;

@@ -90,6 +90,12 @@
     color: #fff;
 }
 
+.sidebar-logo {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+
 /* Main content adjustment */
 .main-content {
     margin-left: 250px;
@@ -118,4 +124,4 @@
     .main-content.expanded {
         margin-left: 250px;
     }
-} 
+}

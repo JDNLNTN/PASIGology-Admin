@@ -1,9 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Table, Button } from 'react-bootstrap';
+import { useAuth } from '../../context/AuthContext';
 
 function Historical() {
   const navigate = useNavigate();
+  const { role: currentUserRole } = useAuth();
+  const normalizedRole = (currentUserRole || '').trim().toLowerCase();
 
   const historicalEvents = [
     { name: 'Plaza Rizal', table: 'historical_plazarizal' },
@@ -28,6 +31,10 @@ function Historical() {
       <Card>
         <Card.Body>
           <h2>Historical Events</h2>
+          {/* Debug output for role */}
+          <div style={{ marginBottom: '1rem', color: 'Black' }}>
+            <h6>You're logged in as {String(currentUserRole)}</h6>
+          </div>
           <Table striped bordered hover responsive>
             <thead>
               <tr>
@@ -40,12 +47,11 @@ function Historical() {
                 <tr key={event.table}>
                   <td>{event.name}</td>
                   <td>
-                    <Button
-                      variant="primary"
-                      onClick={() => handleManage(event.table)}
-                    >
-                      Manage
-                    </Button>
+                    {(normalizedRole === 'super_admin' || normalizedRole === 'content_mod') && (
+                      <Button variant="primary" onClick={() => handleManage(event.table)}>
+                        {normalizedRole === 'super_admin' ? 'Manage' : 'View Facts'}
+                      </Button>
+                    )}           
                   </td>
                 </tr>
               ))}
@@ -57,4 +63,4 @@ function Historical() {
   );
 }
 
-export default Historical; 
+export default Historical;

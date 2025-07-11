@@ -120,19 +120,14 @@ function Administrators() {
 
     const canManageAdmin = (admin) => {
         if (!currentUser) return false;
-        
-        // Super admin can manage content moderators
+        // Super admin can manage their own account and content_mod accounts only
         if (currentUser.role === 'super_admin') {
-            // Super admin can manage both content_mod and other super_admin accounts
-            // unless it's their own account (to prevent self-deletion/banning)
-            return admin.id !== currentUser.id;
+            return admin.id === currentUser.id || admin.role === 'content_mod';
         }
-        
         // Content mod can only manage themselves
         if (currentUser.role === 'content_mod') {
             return admin.id === currentUser.id;
         }
-        
         return false;
     };
 
@@ -318,6 +313,9 @@ function Administrators() {
         <div className="container-fluid">
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>Administrators</h2>
+                        <div className="admin-name">
+                            Welcome, {currentUser?.name || currentUser?.email?.split('@')[0]}
+                        </div>
                 {currentUser?.role === 'super_admin' && (
                     <button
                         className="btn btn-primary"
@@ -368,7 +366,6 @@ function Administrators() {
                             <th onClick={() => handleSort('status')}>
                                 Status {getSortIcon('status')}
                             </th>
-                            <th>Email Confirmed</th>
                             <th>Email Sent</th>
                             <th>Actions</th>
                         </tr>
@@ -391,16 +388,6 @@ function Administrators() {
                                     }>
                                         {admin.status}
                                     </Badge>
-                                </td>
-                                <td>
-                                    {emailStatusLoading
-                                        ? <span>...</span>
-                                        : emailConfirmedMap[admin.id] === undefined
-                                            ? <span>?</span>
-                                            : emailConfirmedMap[admin.id]
-                                                ? <FaCheck style={{ color: 'green' }} title="Confirmed" />
-                                                : <FaTimes style={{ color: 'red' }} title="Not Confirmed" />
-                                    }
                                 </td>
                                 <td>
                                     <FaCheck style={{ color: 'green' }} />
@@ -559,4 +546,4 @@ function Administrators() {
     );
 }
 
-export default Administrators; 
+export default Administrators;

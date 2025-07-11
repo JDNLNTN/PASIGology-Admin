@@ -6,11 +6,19 @@ class AdminService {
         this.table = 'administrators';
     }
 
+    _checkTable() {
+        if (!this.table) {
+            console.error('adminService: Table name is undefined!');
+            throw new Error('Table name is undefined in adminService');
+        }
+    }
+
     /**
      * Get all administrators
      * @returns {Promise<Array>} Array of administrators
      */
     async getAll() {
+        this._checkTable();
         try {
             const { data, error } = await supabase
                 .from(this.table)
@@ -31,6 +39,7 @@ class AdminService {
      * @returns {Promise<Object>} Administrator data
      */
     async getById(id) {
+        this._checkTable();
         try {
             const { data, error } = await supabase
                 .from(this.table)
@@ -52,6 +61,7 @@ class AdminService {
      * @returns {Promise<Object>} Administrator data
      */
     async findByEmail(email) {
+        this._checkTable();
         try {
             console.log(`adminService: Attempting to find admin by email: ${email}`);
             
@@ -92,6 +102,7 @@ class AdminService {
      * @returns {Promise<Object>} Login result
      */
     async login(email, password) {
+        this._checkTable();
         try {
             console.log('adminService: Attempting login for:', email);
             
@@ -142,6 +153,7 @@ class AdminService {
      * @returns {Promise<Object>} Created administrator
      */
     async create(data) {
+        this._checkTable();
         try {
             // Validate password
             const passwordErrors = validatePassword(data.password);
@@ -216,6 +228,7 @@ class AdminService {
      * @returns {Promise<Object>} Updated administrator
      */
     async update(id, data) {
+        this._checkTable();
         try {
             if (data.password) {
                 const passwordErrors = validatePassword(data.password);
@@ -245,6 +258,7 @@ class AdminService {
      * @returns {Promise<void>}
      */
     async delete(id) {
+        this._checkTable();
         try {
             const { error } = await supabase
                 .from(this.table)
@@ -263,6 +277,7 @@ class AdminService {
      * @returns {Promise<boolean>} True if super admin exists
      */
     async checkSuperAdminExists() {
+        this._checkTable();
         try {
             // First try a simple count query
             const { count, error: countError } = await supabase
@@ -395,4 +410,4 @@ class AdminService {
     }
 }
 
-export const adminService = new AdminService(); 
+export const adminService = new AdminService();

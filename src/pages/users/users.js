@@ -131,14 +131,14 @@ function Users() {
     };
 
     const filteredUsers = users.filter(user =>
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.char_name.toLowerCase().includes(searchTerm.toLowerCase())
+        (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (user.char_name && user.char_name.toLowerCase().includes(searchTerm.toLowerCase()))
     ).map(user => ({...user, is_banned: !!user.is_banned}));
 
     return (
         <div className="users">
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>PASIGology Users</h2>
+                <h2>Player list</h2>
             </div>
 
             {error && (
@@ -171,7 +171,7 @@ function Users() {
                         <thead>
                             <tr>
                                 <th>Email</th>
-                                <th>Character Name</th>
+                                <th>Name</th>
                                 <th>Age</th>
                                 <th>Gender</th>
                                 <th>Status</th>

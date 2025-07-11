@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Button, Modal, Form } from 'react-bootstrap';
 import { supabase } from '../../services/supabase';
+import HistoricalManage from './HistoricalManage';
 
 function HistoricalFactsManage() {
   const { tableName } = useParams();
@@ -43,6 +44,11 @@ function HistoricalFactsManage() {
   }, []);
 
   const fetchFacts = useCallback(async () => {
+    if (!tableName) {
+      setError('No table name specified.');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -81,6 +87,10 @@ function HistoricalFactsManage() {
   };
 
   const handleSave = async () => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     try {
       setError(null);
       console.log('Attempting to save fact.');
@@ -92,14 +102,12 @@ function HistoricalFactsManage() {
       const factData = { fact: currentFact.fact.trim() };
       if (currentUserRole === 'super_admin') {
         factData.is_approved = true; // Super admin adds approved facts directly
-      } else {
-        factData.is_approved = false; // Content mod adds facts that need approval
       }
 
       if (isEditing) {
         console.log('Saving existing fact (isEditing: true).');
         // Super admin can edit and approve, content mod can only edit own unapproved facts
-        if (currentUserRole === 'super_admin' || (!currentFact.is_approved && currentUserRole === 'content_mod')) {
+        if (currentUserRole === 'super_admin') {
           console.log('Performing update on table:', tableName, 'with data:', factData, 'for id:', currentFact.id);
           const { error: updateError } = await supabase
             .from(tableName)
@@ -140,6 +148,10 @@ function HistoricalFactsManage() {
   };
 
   const handleApprove = async (id) => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     console.log('Attempting to approve fact with id:', id);
     if (currentUserRole !== 'super_admin') {
       setError('You do not have permission to approve facts.');
@@ -167,6 +179,10 @@ function HistoricalFactsManage() {
   };
 
   const handleDelete = async (id) => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     if (currentUserRole !== 'super_admin') {
       setError('You do not have permission to delete facts.');
       return;
@@ -204,7 +220,7 @@ function HistoricalFactsManage() {
         <Card.Body>
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h2>Manage Historical Facts for {tableName.replace('historical_', '').replace(/\b\w/g, char => char.toUpperCase()).replace(/\-/g, ' ')}</h2>
-            {(currentUserRole === 'super_admin' || currentUserRole === 'content_mod') && (
+            {(currentUserRole === 'super_admin') && (
               <Button variant="primary" onClick={handleAdd}>
                 Add New Fact
               </Button>
@@ -306,4 +322,4 @@ function HistoricalFactsManage() {
   );
 }
 
-export default HistoricalFactsManage; 
+export default HistoricalFactsManage;

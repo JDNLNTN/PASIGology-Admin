@@ -1,23 +1,46 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../services/supabase';
 
 // Create the AuthContext
-const AuthContext = createContext();
+export const AuthContext = createContext();
 
 // AuthProvider component to wrap your app
 export const AuthProvider = ({ children }) => {
-  // For now, use dummy user and role. Replace with real auth logic as needed.
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Example: fetch user and role from localStorage or API
-    // Here, we just set dummy values for demonstration
-    setUser({ name: 'Demo User', email: 'demo@example.com' });
-    setRole('super_admin');
+    const getUserAndRole = async () => {
+      setLoading(true);
+      // Get session/user from Supabase
+      const { data: { user: supaUser } } = await supabase.auth.getUser();
+      setUser(supaUser);
+
+      if (supaUser) {
+        // Fetch role from administrators table
+        const { data, error } = await supabase
+          .from('administrators')
+          .select('role')
+          .eq('id', supaUser.id)
+          .single();
+
+        if (data && data.role) {
+          setRole(data.role);
+        } else {
+          setRole(null);
+        }
+      } else {
+        setRole(null);
+      }
+      setLoading(false);
+    };
+
+    getUserAndRole();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, role }}>
+    <AuthContext.Provider value={{ user, role, loading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -30,4 +53,4 @@ export const useAuth = () => {
 
 // Usage:
 // Wrap your app with <AuthProvider> in index.js or App.js
-// Use useAuth() in components to access user and role 
+// Use useAuth() in components to access user and role

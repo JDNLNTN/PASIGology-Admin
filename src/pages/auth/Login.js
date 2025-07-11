@@ -18,7 +18,7 @@ function Login() {
 
         try {
             console.log('Login: Starting login process...');
-            
+
             // Sign in with Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email,
@@ -43,6 +43,13 @@ function Login() {
                 throw new Error('No administrator profile found');
             }
 
+            // Prevent login if content_mod is banned
+            if (adminData.role === 'content_mod' && adminData.status && adminData.status.toLowerCase() === 'banned') {
+                console.error('Login: content_mod is banned');
+                await supabase.auth.signOut();
+                throw new Error('Your account has been banned. Please contact the administrator.');
+            }
+
             // Store admin data in localStorage
             localStorage.setItem('adminData', JSON.stringify(adminData));
             localStorage.setItem('adminInfo', JSON.stringify({
@@ -52,6 +59,7 @@ function Login() {
                 role: adminData.role,
                 status: adminData.status
             }));
+            localStorage.setItem('admin_id', adminData.id); // Store admin_id for useAuth
             localStorage.setItem('role', adminData.role);
             localStorage.setItem('name', adminData.name);
 
@@ -59,8 +67,10 @@ function Login() {
             if (adminData.role === 'super_admin') {
                 navigate('/dashboard');
             } else {
-                navigate('/admin-dashboard');
+                navigate('/dashboard');
             }
+            // Force browser refresh after navigation
+            window.location.reload();
         } catch (err) {
             console.error('Login: Error during login:', err);
             setError(err.message || 'Invalid login credentials');
@@ -109,4 +119,4 @@ function Login() {
     );
 }
 
-export default Login; 
+export default Login;

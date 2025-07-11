@@ -14,6 +14,7 @@ const Sidebar = () => {
             const { error } = await supabase.auth.signOut();
             if (error) throw error;
             navigate('/login');
+            window.location.reload(); // Force refresh after navigating to login
         } catch (error) {
             console.error('Error logging out:', error.message);
         }
@@ -27,14 +28,13 @@ const Sidebar = () => {
         { path: '/quiz', label: 'Quiz', icon: '❓' },
         { path: '/userprogress', label: 'User Progress', icon: '📈' },
         { path: '/users', label: 'Users', icon: '👤' },
-        { path: '/settings', label: 'Settings', icon: '⚙️' }
     ];
 
     return (
         <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
             <div className="sidebar-header">
                 <div className="logo-container">
-                    <i className="fas fa-shield-alt"></i>
+                    <img src="/logo.svg" alt="Admin Logo" className="sidebar-logo" />
                     {!collapsed && <span>Admin Panel</span>}
                 </div>
                 <button 
@@ -68,4 +68,4 @@ const Sidebar = () => {
     );
 };
 
-export default Sidebar; 
+export default Sidebar;

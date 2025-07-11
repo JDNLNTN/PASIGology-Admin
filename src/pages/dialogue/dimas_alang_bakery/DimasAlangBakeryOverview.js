@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Table, Button } from 'react-bootstrap';
-import DialogueLayout from '../DialogueLayout';
 
 function DimasAlangBakeryOverview() {
   const navigate = useNavigate();
@@ -16,7 +15,6 @@ const dialoguePages = [
   };
 
   return (
-    <DialogueLayout>
       <div className="dimas-alang-bakery-overview">
         <h2>Dimas-Alang Bakery Scenario</h2>
         <Card>
@@ -48,7 +46,6 @@ const dialoguePages = [
           </Card.Body>
         </Card>
       </div>
-    </DialogueLayout>
   );
 }
 

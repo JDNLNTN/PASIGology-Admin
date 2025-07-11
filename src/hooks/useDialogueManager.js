@@ -7,6 +7,12 @@ const useDialogueManager = (tableName) => {
   const [error, setError] = useState(null);
 
   const fetchDialogues = useCallback(async () => {
+    if (!tableName) {
+      console.error('No tableName provided to useDialogueManager!');
+      setError('No table name specified.');
+      setLoading(false);
+      return;
+    }
     console.log(`Attempting to fetch dialogues for table: ${tableName}`);
     setLoading(true);
     setError(null);
@@ -38,6 +44,11 @@ const useDialogueManager = (tableName) => {
   }, [fetchDialogues]);
 
   const addDialogue = async (newDialogueData) => {
+    if (!tableName) {
+      console.error('No tableName provided to useDialogueManager!');
+      setError('No table name specified.');
+      return;
+    }
     setError(null);
     try {
       // The sequence and dialogue are now expected to be provided in newDialogueData
@@ -61,21 +72,21 @@ const useDialogueManager = (tableName) => {
   };
 
   const updateDialogue = async (id, updatedDialogueData) => {
+    if (!tableName) {
+      console.error('No tableName provided to useDialogueManager!');
+      setError('No table name specified.');
+      return;
+    }
     setError(null);
     try {
       const currentDialogue = dialogues.find(d => d.id === id);
       if (!currentDialogue) {
         throw new Error('Dialogue not found.');
       }
-
-      const oldSequence = currentDialogue.sequence;
-      const newSequence = updatedDialogueData.sequence !== undefined ? updatedDialogueData.sequence : oldSequence;
-      const newDialogueText = updatedDialogueData.dialogue !== undefined ? updatedDialogueData.dialogue : currentDialogue.dialogue;
-
-      // First, update the specific dialogue entry
+      // Only update the fields provided in updatedDialogueData
       const { data: updatedItem, error: updateError } = await supabase
         .from(tableName)
-        .update({ sequence: newSequence, dialogue: newDialogueText })
+        .update({ ...updatedDialogueData })
         .eq('id', id)
         .select()
         .single();
@@ -92,6 +103,11 @@ const useDialogueManager = (tableName) => {
   };
 
   const deleteDialogue = async (id) => {
+    if (!tableName) {
+      console.error('No tableName provided to useDialogueManager!');
+      setError('No table name specified.');
+      return;
+    }
     setError(null);
     try {
       const dialogueToDelete = dialogues.find(d => d.id === id);
@@ -118,4 +134,4 @@ const useDialogueManager = (tableName) => {
   return { dialogues, loading, error, addDialogue, updateDialogue, deleteDialogue, fetchDialogues };
 };
 
-export default useDialogueManager; 
+export default useDialogueManager;
