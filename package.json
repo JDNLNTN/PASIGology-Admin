@@ -2,8 +2,11 @@
   "name": "adminpanel",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://JDNLNTN.github.io/PASIGology-Admin",
+  "homepage": "https://jdnlntn.github.io/PASIGology-Admin",
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@fortawesome/fontawesome-free": "^6.7.2",
