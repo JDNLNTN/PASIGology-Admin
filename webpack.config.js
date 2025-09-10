@@ -6,8 +6,10 @@ module.exports = {
   entry: './src/index.js',
   output: {
     path: path.resolve(__dirname, 'build'),
-    filename: 'bundle.js',
-    publicPath: '/PASIGology-Admin/'
+  filename: 'static/js/[name].[contenthash].js',
+  chunkFilename: 'static/js/[name].[contenthash].chunk.js',
+  clean: true,
+  publicPath: './'
   },
   module: {
     rules: [
