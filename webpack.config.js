@@ -9,8 +9,12 @@ module.exports = {
   filename: 'static/js/[name].[contenthash].js',
   chunkFilename: 'static/js/[name].[contenthash].chunk.js',
   clean: true,
-  publicPath: './'
+  // Use a production-friendly relative publicPath for static hosts (gh-pages)
+  // but use an absolute path for the dev server so assets load correctly.
+  publicPath: process.env.NODE_ENV === 'production' ? './' : '/'
   },
+  // Dev-friendly source maps (production will use full source-map)
+  devtool: process.env.NODE_ENV === 'production' ? 'source-map' : 'eval-cheap-module-source-map',
   module: {
     rules: [
       {

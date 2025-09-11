@@ -1,48 +1,80 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Alert } from 'react-bootstrap';
-import { supabase } from '../../services/supabase';
+import { supabase, fetchProfiles } from '../../services/supabasePlayer';
 import './users.css';
 
+// Users page (admin view)
+// - loads a list of player profiles from Supabase using the anon client
+// - normalizes returned rows to a consistent shape so the UI can render
+// - supports searching, banning/unbanning, and deleting users
+
 function Users() {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [successMessage, setSuccessMessage] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
+    // Data + UI state
+    const [users, setUsers] = useState([]); // normalized user rows
+    const [loading, setLoading] = useState(true); // true while fetching
+    const [error, setError] = useState(null); // holds fetch/operation errors for UI
+    const [successMessage, setSuccessMessage] = useState(''); // operation success alerts
+    const [searchTerm, setSearchTerm] = useState(''); // text search input
+    // modal visibility state
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showBanModal, setShowBanModal] = useState(false);
     const [showUnbanModal, setShowUnbanModal] = useState(false);
+    // the user currently targeted for ban/delete/unban actions
     const [selectedUser, setSelectedUser] = useState(null);
 
+    // Load users on first render
     useEffect(() => {
         fetchUsers();
     }, []);
 
+    // fetchUsers: retrieves profile rows from Supabase, normalizes them and
+    // updates component state. Notes:
+    // - We request '*' to avoid 400s when column names differ between projects.
+    // - Normalization maps common column name variants to a single shape the UI expects.
     const fetchUsers = async () => {
         try {
             setLoading(true);
+
+            // Confirm there's a session (this uses the anon client). This is
+            // mostly a sanity check — Supabase will still respond to anon requests.
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            
             if (sessionError) {
                 throw new Error('Authentication error');
             }
 
-            const { data, error } = await supabase
-                .from('PASIGology')
-                .select('user_id, email, char_name, age, gender, is_banned');
+            // Use fetchProfiles helper which tries likely table names and
+            // returns per-table diagnostics if nothing is found.
+            const result = await fetchProfiles({ table: 'profiles', select: '*' });
+            const { data, error, tableUsed } = result || {};
+
+            if (tableUsed) console.log('fetchProfiles used table:', tableUsed);
 
             if (error) {
-                throw new Error(`Failed to load users: ${error.message}`);
+                // propagate a readable message to the UI
+                throw new Error(`Failed to load users: ${error.message || error}`);
             }
 
             if (!data) {
                 throw new Error('No data received from the server');
             }
 
+            // Log the raw payload to help debug differing schemas
+            console.log('Raw users payload:', data);
+
+            // Normalize rows so the UI can rely on consistent keys.
             const processedData = data.map(user => ({
-                ...user,
+                // normalize id/user_id
+                user_id: user.user_id || user.id || user.uid || null,
+                // normalize display name
+                char_name: user.char_name || user.username || user.name || '',
+                email: user.email || user.user_email || '',
+                age: user.age || null,
+                // map local gender codes to human-friendly values
                 gender: user.gender === 'iha' ? 'female' : user.gender === 'iho' ? 'male' : user.gender,
-                is_banned: !!user.is_banned
+                created_at: user.created_at || user.createdAt || null,
+                is_banned: !!(user.is_banned || user.banned || user.isBanned),
+                // keep raw row for debugging when things don't match
+                _raw: user
             }));
 
             console.log('Successfully received data:', processedData);
@@ -55,6 +87,7 @@ function Users() {
         }
     };
 
+    // UI handlers open confirmation modals and set the targeted user
     const handleBan = (user) => {
         setSelectedUser(user);
         setShowBanModal(true);
@@ -70,6 +103,8 @@ function Users() {
         setShowUnbanModal(true);
     };
 
+    // Action handlers: perform the backend update/delete and refresh the list.
+    // NOTE: these call the 'PASIGology' table — adjust if your table name differs.
     const handleBanConfirm = async () => {
         try {
             const { error } = await supabase
@@ -130,6 +165,7 @@ function Users() {
         }
     };
 
+    // Apply search filter and ensure is_banned is a boolean for UI checks
     const filteredUsers = users.filter(user =>
         (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (user.char_name && user.char_name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -174,7 +210,7 @@ function Users() {
                                 <th>Name</th>
                                 <th>Age</th>
                                 <th>Gender</th>
-                                <th>Status</th>
+                                <th>created_at</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
