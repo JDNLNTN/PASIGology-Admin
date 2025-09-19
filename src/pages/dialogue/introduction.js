@@ -29,6 +29,16 @@ function HistoricalManage() {
   const [loading, setLoading] = useState(true); // initial loading spinner
   const [currentUserRole, setCurrentUserRole] = useState(null); // used to gate actions
   const [currentUserId, setCurrentUserId] = useState(null); // store auth.uid() for RLS
+  const [fetchDebug, setFetchDebug] = useState({ count: 0, sample: null, error: null });
+
+  // Helper to recognize multiple possible role strings for content moderators
+  // Accepts values like 'content_moderator', 'content-mod', 'content_mod', 'content_modERATOR', 'content_mod'
+  const isContentModerator = (role) => {
+    if (!role) return false;
+    const r = String(role).toLowerCase().trim();
+    // Match content_mod, content-moderator, contentmoderator, content_modERATOR, content_mod, contentmod
+    return /^(content(?:[_-]?mod(?:erator)?)?|contentmoderator|contentmod)$/.test(r);
+  };
 
   
 
@@ -67,9 +77,15 @@ function HistoricalManage() {
 
       console.log('Fetched data:', data);
       setFacts(data || []);
+      try {
+        setFetchDebug({ count: (data || []).length, sample: JSON.stringify((data || []).slice(0, 5), null, 2), error: null });
+      } catch (e) {
+        setFetchDebug({ count: (data || []).length, sample: null, error: null });
+      }
     } catch (err) {
       console.error('Error fetching facts:', err.message);
       setError(`Error fetching facts: ${err.message}`);
+      setFetchDebug({ count: 0, sample: null, error: err.message });
     } finally {
       setLoading(false);
     }
@@ -92,13 +108,15 @@ function HistoricalManage() {
       // info there). This covers the standard login flow used in this app
       // where `adminData.role` and `role` are persisted locally.
       let role = user?.user_metadata?.role || null;
+      let localRole = null;
+      let adminDataStr = null;
       if (!role && typeof window !== 'undefined') {
         // localStorage keys used in the app: 'role', 'adminData'
-        const localRole = localStorage.getItem('role');
+        localRole = localStorage.getItem('role');
         if (localRole) role = localRole;
         else {
           try {
-            const adminDataStr = localStorage.getItem('adminData');
+            adminDataStr = localStorage.getItem('adminData');
             const adminData = adminDataStr ? JSON.parse(adminDataStr) : null;
             if (adminData && adminData.role) role = adminData.role;
           } catch (e) {
@@ -114,6 +132,9 @@ function HistoricalManage() {
         const localAdminId = localStorage.getItem('admin_id');
         if (localAdminId) userId = localAdminId;
       }
+
+      // Debug: log resolved role and ids so developers can see why a role may not match
+      console.debug('fetchCurrentUserRole resolved', { user, role, localRole, adminDataStr, userId });
 
       setCurrentUserId(userId || null);
       setCurrentUserRole(role || null);
@@ -353,10 +374,36 @@ function HistoricalManage() {
         <Card.Body>
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h2>Manage Introduction Dialogue</h2>
-            <Button variant="primary" onClick={handleAdd}>
-              Add New Dialogue
-            </Button>
+            {/* Only allow adding when signed-in and role is super_admin or content_moderator.
+                This prevents anonymous users or lower roles from opening the add modal.
+                We rely on the DB trigger to set `created_by` on insert; `created_by` is
+                used below to let content moderators edit their own rows. */}
+            {((currentUserId && (currentUserRole === 'super_admin' || isContentModerator(currentUserRole))) || (!currentUserId && isContentModerator(currentUserRole))) && (
+              <Button variant="primary" onClick={handleAdd}>
+                Add New Dialogue
+              </Button>
+            )}
           </div>
+
+          {/* Debug banner: shows resolved role/id to help debug role-matching issues.
+              Visible when ?debug=1 is in the URL or when not in production. */}
+          {(() => {
+            try {
+              const params = new URLSearchParams(window.location.search);
+              const showDebug = params.get('debug') === '1' || process.env.NODE_ENV !== 'production';
+              if (!showDebug) return null;
+              return (
+                <div className="alert alert-secondary small" role="status">
+                  <strong>DEBUG:</strong> role={String(currentUserRole)} | id={String(currentUserId)} | isContentMod={String(isContentModerator(currentUserRole))}
+                  <br />
+                  <strong>FETCH:</strong> rows={fetchDebug.count} | error={String(fetchDebug.error)}
+                  {fetchDebug.sample ? <pre className="small mt-2" style={{maxHeight: 120, overflow:'auto'}}>{fetchDebug.sample}</pre> : null}
+                </div>
+              );
+            } catch (e) {
+              return null;
+            }
+          })()}
 
           {error && (
             <div className="alert alert-danger" role="alert">
@@ -385,6 +432,7 @@ function HistoricalManage() {
                     <td>{fact.is_approved ? 'Approved' : 'Pending Approval'}</td>
                     <td>
                       {currentUserRole === 'super_admin' ? (
+                        // super_admin sees full action set
                         <div className="d-flex align-items-center">
                           <Button
                             variant="outline-primary"
@@ -410,6 +458,23 @@ function HistoricalManage() {
                             Delete
                           </Button>
                         </div>
+                      ) : isContentModerator(currentUserRole) ? (
+                        // content_moderator may view all rows but can only edit their own entries
+                        // We assume the table includes a `created_by` column set by the DB trigger.
+                        (currentUserId && fact?.created_by && String(currentUserId) === String(fact.created_by)) ? (
+                          <div className="d-flex align-items-center">
+                            <Button
+                              variant="outline-primary"
+                              size="sm"
+                              className="me-2"
+                              onClick={() => handleEdit(fact)}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted small">No actions</span>
+                        )
                       ) : (
                         <span className="text-muted small">No actions</span>
                       )}

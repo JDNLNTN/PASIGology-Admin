@@ -173,7 +173,7 @@ const CreateAdmin = () => {
                         </h4>
                         {superAdminExists && (
                             <button 
-                                onClick={() => navigate('/admin')} 
+                                onClick={() => navigate('/administrators')} 
                                 className="btn btn-danger"
                             >
                                 <i className="fas fa-arrow-left me-2"></i>
