@@ -3,6 +3,7 @@ import { Card, Row, Col, Button, Alert, Dropdown } from 'react-bootstrap';
 import { Pie, Bar, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, PointElement, LineElement } from 'chart.js';
 import { supabase } from '../services/supabase';
+import { ENABLED_ATTEMPT_TABLES } from '../config/attemptTables';
 import '../styles/Dashboard.css';
 
 ChartJS.register(
@@ -407,41 +408,63 @@ function Dashboard() {
             setAttemptChartLoading(true);
             setAttemptChartError(null);
             try {
-                // Table names and labels
-                const tables = [
+                // Table names and labels (only used as candidates)
+                // Default candidate tables with human labels; only query those enabled in config
+                const candidateTables = [
                     { name: 'attempt_dimas_alangbakery_identification_scores', label: 'Dimas Alang Bakery Identification' },
                     { name: 'attempt_dimas_alangbakery_multiple_scores', label: 'Dimas Alang Bakery Multiple' },
                     { name: 'attempt_plazarizal_scores', label: 'Plaza Rizal' },
                     { name: 'attempt_immaculate_scores', label: 'Immaculate' }
                 ];
-                // Fetch all tables in parallel
+
+                const tables = candidateTables.filter(t => ENABLED_ATTEMPT_TABLES.includes(t.name));
+
+                // If no attempt tables are enabled, skip the fetch entirely
+                if (tables.length === 0) {
+                    setAttemptRawData(null);
+                    setAttemptChartData(null);
+                    setAttemptChartLoading(false);
+                    return;
+                }
+
+                // Fetch all tables in parallel; Supabase returns a result object even on 404 (error/status present)
                 const results = await Promise.all(
-                    tables.map(t =>
-                        supabase.from(t.name).select('user_name, attempt1_score, attempt2_score, attempt3_score, attempt4_score, attempt5_score')
-                    )
+                    tables.map(t => supabase.from(t.name).select('user_name, attempt1_score, attempt2_score, attempt3_score, attempt4_score, attempt5_score'))
                 );
-                // For each table, collect scores per attempt (array of arrays)
-                const datasets = results.map((res, idx) => {
-                    // For each attempt, collect all scores (not just count)
+
+                // Filter out any tables that returned a 404 (not found) so we don't attempt to render missing data
+                const valid = results.map((res, idx) => ({ table: tables[idx], res }))
+                    .filter(({ res }) => {
+                        // If the table doesn't exist PostgREST returns a 404 status; skip those tables
+                        if (res && res.error && res.status === 404) return false;
+                        return true;
+                    });
+
+                if (valid.length === 0) {
+                    // No attempt tables found — set empty state and avoid showing an error to the user
+                    setAttemptRawData(null);
+                    setAttemptChartData(null);
+                    setAttemptChartLoading(false);
+                    return;
+                }
+
+                // Build datasets only from valid tables
+                const datasets = valid.map(({ table, res }, idx) => {
                     const data = [1,2,3,4,5].map(attemptNum => {
-                        // Get all scores for this attempt (filter out null/undefined)
                         const scores = res.data ? res.data.map(row => row[`attempt${attemptNum}_score`]).filter(s => s !== null && s !== undefined) : [];
-                        // For chart, show average score (or 0 if none)
                         if (scores.length === 0) return 0;
                         const avg = scores.reduce((a,b) => a+b, 0) / scores.length;
-                        return Math.round(avg * 100) / 100; // round to 2 decimals
+                        return Math.round(avg * 100) / 100;
                     });
                     return {
-                        label: tables[idx].label,
+                        label: table.label,
                         data,
-                        backgroundColor: attemptTableColors[idx],
+                        backgroundColor: attemptTableColors[idx % attemptTableColors.length],
                     };
                 });
-                // For CSV export, keep the raw scores
-                const rawData = results.map((res, idx) => ({
-                    label: tables[idx].label,
-                    rows: res.data || []
-                }));
+
+                const rawData = valid.map(({ table, res }) => ({ label: table.label, rows: res.data || [] }));
+
                 setAttemptRawData(rawData);
                 setAttemptChartData({
                     labels: ['Attempt 1', 'Attempt 2', 'Attempt 3', 'Attempt 4', 'Attempt 5+'],

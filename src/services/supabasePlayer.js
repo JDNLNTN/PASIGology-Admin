@@ -1,8 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-// Supabase configuration
-const supabaseUrl = 'https://ubhxzdwtmpcmgixsdjpn.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViaHh6ZHd0bXBjbWdpeHNkanBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4NzI2NjMsImV4cCI6MjA3MTQ0ODY2M30.XXmoROIenZKlcaQfTu8QCzhYeR2ddfNs0e7eYT_yXcM';
+import { supabase } from './supabase';
 
 // Password requirements configuration
 export const PASSWORD_REQUIREMENTS = {
@@ -11,53 +7,14 @@ export const PASSWORD_REQUIREMENTS = {
     SPECIAL_CHARS: '!@#$%^&*()_+-=[]{}|;:,.<>?'
 };
 
-// Create a single Supabase client instance for regular operations
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-    }
-});
-
 // NOTE: Do NOT store or use the service_role key in client-side code.
 // The code below intentionally avoids creating an admin client. If you
 // need elevated access, call a server-side endpoint that uses the
 // service_role key securely.
 
-// Initialize and test connections
-const initializeConnections = async () => {
-    try {
-        // Test regular client connection
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            console.log('Active session found:', session.user.email);
-        }
-
-        // Test reading from the common 'profile' table (singular) using the anon key.
-        // If your schema uses 'profiles' change the table name accordingly or
-        // pass a table option to `fetchProfiles` below.
-        try {
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('id')
-                .limit(1);
-
-            if (profileError) {
-                console.warn('Reading from public.profiles failed (this may be expected until you configure RLS):', profileError.message || profileError);
-            } else {
-                console.log('Able to read from public.profiles (anon):', profileData?.length ?? 0);
-            }
-        } catch (err) {
-            console.warn('Error testing profiles read:', err?.message || err);
-        }
-    } catch (error) {
-        console.error('Error initializing connections:', error);
-    }
-};
-
-// Initialize connections when the module is loaded
-initializeConnections();
+// We reuse the shared `supabase` client from services/supabase.js. Any initialization
+// (session checks or admin checks) should be done in that module to avoid creating
+// multiple GoTrue clients during HMR.
 
 // Helper: fetch records from the public 'profiles' table using the anon key.
 // Returns { data, error } — call from your components.

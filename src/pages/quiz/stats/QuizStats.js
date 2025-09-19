@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Spinner, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../services/supabase';
+import { ENABLED_ATTEMPT_TABLES } from '../../../config/attemptTables';
 import { FaArrowLeft } from 'react-icons/fa';
 
 
@@ -34,6 +35,13 @@ function QuizStats() {
   const quizInfo = quizTableMap[tableName] || { table: tableName, display: tableName };
 
   useEffect(() => {
+    // If the table is not enabled in config, skip fetching to avoid 404s
+    if (!ENABLED_ATTEMPT_TABLES.includes(quizInfo.table)) {
+      setLoading(false);
+      setAttempts([]);
+      setError(`Table ${quizInfo.table} is not enabled in the frontend config.`);
+      return;
+    }
     fetchAttempts();
     // eslint-disable-next-line
   }, [tableName]);
@@ -42,6 +50,19 @@ function QuizStats() {
     setLoading(true);
     setError(null);
     try {
+      // First try a lightweight existence check to avoid 404 noise
+      try {
+        const ping = await supabase.from(quizInfo.table).select('id').limit(1).maybeSingle();
+        // If ping returned an error with 404, treat as missing table
+        if (ping && ping.error && ping.status === 404) {
+          setAttempts([]);
+          setError(`Table ${quizInfo.table} not found in database.`);
+          return;
+        }
+      } catch (e) {
+        // Some clients may throw; fallthrough to main fetch which will catch and set error
+      }
+
       const { data, error } = await supabase
         .from(quizInfo.table)
         .select('*');

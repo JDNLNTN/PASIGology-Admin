@@ -1,626 +1,460 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  Container,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-  IconButton,
-  CircularProgress,
-  Select,
-  MenuItem,
-  InputLabel,
-  FormControl,
-  Alert,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-} from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import SaveIcon from '@mui/icons-material/Save';
-import CancelIcon from '@mui/icons-material/Cancel';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import useDialogueManager from '../../hooks/useDialogueManager';
-import useUserRole from '../../hooks/useUserRole';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { useAuth } from '../../context/AuthContext';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Card, Table, Button, Modal, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
+import { supabase } from '../../services/supabase';
 
-export default function IntroductionDialogue() {
-  const location = useLocation();
-  const { dialogues, loading, error, addDialogue, updateDialogue, deleteDialogue } = useDialogueManager('dialoguesIntro');
- const { role: currentUserRole } = useAuth();
+// HistoricalManage
+// This component provides a small admin UI to manage historical facts for a
+// specific table. The table name is pulled from the URL params (example:
+// /historical/manage/schema.table_name). The component supports:
+// - listing facts (select *)
+// - adding new facts (insert)
+// - editing existing facts (update)
+// - deleting facts (delete)
+// - approving facts (update is_approved)
+// Notes:
+// - The component uses the client-side Supabase anon key. Ensure RLS and
+//   policies allow the current role to perform the operations in development.
+// - The code assumes each record has `id`, `fact`, and `is_approved` fields.
 
-  // Prefer role from navigation state if available, otherwise use hook
-  const effectiveRole = location.state?.role || currentUserRole;
+function HistoricalManage() {
+  const tableName = "intro";
+  const navigate = useNavigate();
+  // UI + data state
+  const [facts, setFacts] = useState([]); // list of fact rows from the DB
+  const [showModal, setShowModal] = useState(false); // modal visibility
+  const [currentFact, setCurrentFact] = useState({ id: null, dialogue: '' }); // editing/adding target
+  const [isEditing, setIsEditing] = useState(false); // whether modal is edit mode
+  const [error, setError] = useState(null); // user-visible errors
+  const [loading, setLoading] = useState(true); // initial loading spinner
+  const [currentUserRole, setCurrentUserRole] = useState(null); // used to gate actions
+  const [currentUserId, setCurrentUserId] = useState(null); // store auth.uid() for RLS
 
-  console.log('Debug: useUserRole hook result:', { currentUserRole, effectiveRole });
-
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ id: null, sequence: 0, dialogue: '', speaker: '' });
-  const [newDialogueText, setNewDialogueText] = useState('');
-  const [newSpeakerText, setNewSpeakerText] = useState('a'); // Default to Aji
-  const [newSequenceText, setNewSequenceText] = useState('');
-  const [componentError, setComponentError] = useState(null);
-  const [refactorOpen, setRefactorOpen] = useState(false);
-  const [dragDialogues, setDragDialogues] = useState([]);
-  const [dragLoading, setDragLoading] = useState(false);
-  const [suggestingId, setSuggestingId] = useState(null);
-  const [suggestionText, setSuggestionText] = useState('');
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [dialogueToDelete, setDialogueToDelete] = useState(null);
   
-  // Define speakers
-  // a = Aji Character, h = Harold Character
-  const speakers = ['a', 'h']; // a = Aji Character, h = harold Character
-  const allSequences = Array.from({ length: 100 }, (_, i) => i + 1); // Define all possible sequences
-  
-  // Filter out sequences already in use
-  const usedSequences = new Set(dialogues.map(d => Number(d.sequence)));
-  const availableSequences = allSequences.filter(seq => !usedSequences.has(seq));
 
-  const handleEdit = (dialogue) => {
-    setEditingId(dialogue.id);
-    setEditForm(dialogue);
-  };
-//handle saving adding dialogue
-  const handleSave = async () => {
-    setComponentError(null);
+  useEffect(() => {
+    if (!tableName) {
+      setError('No table name specified in the URL.');
+      setLoading(false);
+      return;
+    }
+  // Load facts for the current table and determine the current user's role
+  // (role is used to show/hide admin actions like Edit/Approve/Delete).
+  fetchFacts();
+  fetchCurrentUserRole();
+  }, [tableName]);
+
+  const fetchFacts = async () => {
+    if (!tableName) {
+      setError('No table name specified.');
+      setLoading(false);
+      return;
+    }
     try {
-      if (editForm.sequence <= 0) {
-        setComponentError('Sequence must be a positive number.');
-        toast.error('Sequence must be a positive number.');
-        return;
+      setLoading(true);
+      setError(null);
+      console.log('Fetching from table:', tableName);
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching facts:', error);
+        setError(`Error fetching facts: ${error.message}`);
+        throw error;
       }
-      let updatedData = {};
-      if (effectiveRole === 'super_admin') {
-        updatedData = { sequence: editForm.sequence, dialogue: editForm.dialogue, speaker: editForm.speaker, for_approval: null };
-      } else if (effectiveRole === 'content_mod') {
-        updatedData = { sequence: editForm.sequence, for_approval: editForm.dialogue };
-      }
-      await updateDialogue(editForm.id, updatedData);
-      setEditingId(null);
-      toast.success(effectiveRole === 'super_admin' ? 'Dialogue updated successfully!' : 'Edit submitted for approval!');
+
+      console.log('Fetched data:', data);
+      setFacts(data || []);
     } catch (err) {
-      setComponentError('Failed to update dialogue.');
-      toast.error('Failed to update dialogue.');
+      console.error('Error fetching facts:', err.message);
+      setError(`Error fetching facts: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
+
+  // fetchFacts explanation:
+  // - Reads all rows using `select('*')` from the table name provided in the
+  //   route. The route must include a fully-qualified identifier (schema.table)
+  //   if your DB requires it. If the fetch fails, the error is displayed above
+  //   the table and logged to the console for debugging.
+
+  const fetchCurrentUserRole = async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      // data.user may be null if not signed in
+      const user = data?.user || null;
+
+      // Prefer role stored in Supabase user_metadata, but fall back to
+      // values saved to localStorage during login (the app stores admin
+      // info there). This covers the standard login flow used in this app
+      // where `adminData.role` and `role` are persisted locally.
+      let role = user?.user_metadata?.role || null;
+      if (!role && typeof window !== 'undefined') {
+        // localStorage keys used in the app: 'role', 'adminData'
+        const localRole = localStorage.getItem('role');
+        if (localRole) role = localRole;
+        else {
+          try {
+            const adminDataStr = localStorage.getItem('adminData');
+            const adminData = adminDataStr ? JSON.parse(adminDataStr) : null;
+            if (adminData && adminData.role) role = adminData.role;
+          } catch (e) {
+            // ignore JSON parse errors
+          }
+        }
+      }
+
+      // Determine current user id: prefer supabase user id, fall back to
+      // localStorage 'admin_id' (set by the Login flow).
+      let userId = user?.id || null;
+      if (!userId && typeof window !== 'undefined') {
+        const localAdminId = localStorage.getItem('admin_id');
+        if (localAdminId) userId = localAdminId;
+      }
+
+      setCurrentUserId(userId || null);
+      setCurrentUserRole(role || null);
+    } catch (error) {
+      console.error('Error fetching current user role:', error);
+      setError('Error fetching current user role');
+    }
+  };
+
+  // fetchCurrentUserRole explanation:
+  // - Uses the Supabase auth client to retrieve the current user's metadata.
+  // - This assumes the `user_metadata` contains a `role` property. If your
+  //   authentication flow stores role information elsewhere, update this.
+
+  const handleAdd = () => {
+  setCurrentFact({ id: null, dialogue: '' });
+    setIsEditing(false);
+    setShowModal(true);
+    setError(null);
+  };
+
+  // handleAdd explanation:
+  // - Prepares the modal for inserting a new fact by clearing `currentFact`.
+
+  const handleEdit = (fact) => {
+    setCurrentFact(fact);
+    setIsEditing(true);
+    setShowModal(true);
+    setError(null);
+  };
+
+  // handleEdit explanation:
+  // - Puts the selected fact into edit-mode and opens the modal so the user
+  //   can update the text. The `currentFact` object is bound to the textarea.
 
   const handleDelete = async (id) => {
-    setComponentError(null);
-    try {
-      await deleteDialogue(id);
-      toast.success('Dialogue deleted successfully!');
-    } catch (err) {
-      setComponentError(err.message);
-      toast.error(`Error deleting dialogue: ${err.message}`);
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
+    if (window.confirm('Are you sure you want to delete this fact?')) {
+      try {
+        setError(null);
+        const { error } = await supabase
+          .from(tableName)
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          console.error('Error deleting fact:', error);
+          setError(`Error deleting fact: ${error.message}`);
+          throw error;
+        }
+        await fetchFacts();
+      } catch (error) {
+        console.error('Error in handleDelete:', error);
+        setError(`Error deleting fact: ${error.message}`);
+      }
     }
   };
 
-  const handleAdd = async () => {
-    setComponentError(null);
+  // handleDelete explanation:
+  // - Confirms with the user, then issues a DELETE where id = provided id.
+  // - On success it refreshes the list. Permission/RLS failures will be
+  //   surfaced as errors that you can inspect in the console or the alert.
+
+  const handleSave = async () => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     try {
-      if (!newDialogueText.trim() || !newSpeakerText.trim() || !newSequenceText) {
-        setComponentError('Dialogue, Speaker, and Sequence cannot be empty.');
-        toast.error('Dialogue, Speaker, and Sequence cannot be empty.');
+      setError(null);
+      console.log('Attempting to save to table:', tableName);
+      console.log('Current fact data:', currentFact);
+
+      // ensure non-empty
+      if (!currentFact.dialogue || !currentFact.dialogue.trim()) {
+        setError('Dialogue cannot be empty');
         return;
       }
-      const sequenceExists = dialogues.some(
-        (dialogue) => dialogue.sequence === Number(newSequenceText)
-      );
-      if (sequenceExists) {
-        setComponentError('Sequence already exists. Please choose a different sequence number.');
-        toast.error('Sequence already exists. Please choose a different sequence number.');
+
+  // refresh current user to ensure auth.uid() is available at save time
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) console.debug('supabase.auth.getUser error:', userError);
+  const savingUserId = userData?.user?.id || null;
+  console.debug('Saving as user id:', savingUserId);
+
+      if (!savingUserId) {
+        setError('You must be signed in to save a dialogue.');
         return;
       }
-      let newDialogueData = {};
-      if (effectiveRole === 'super_admin') {
-        newDialogueData = { sequence: Number(newSequenceText), dialogue: newDialogueText, speaker: newSpeakerText };
-      } else if (effectiveRole === 'content_mod') {
-        newDialogueData = { sequence: Number(newSequenceText), dialogue: '', for_approval: newDialogueText, speaker: newSpeakerText };
+
+      // Let the database set `created_by` via a trigger (safer). Only send
+      // the data the user is allowed to provide from the client.
+      const factData = {
+        dialogue: currentFact.dialogue.trim()
+      };
+
+      if (isEditing) {
+        console.log('Updating existing fact with ID:', currentFact.id);
+        const { data, error } = await supabase
+          .from(tableName)
+          .update(factData)
+          .eq('id', currentFact.id)
+          .select();
+
+        if (error) {
+          console.error('Error updating fact:', error, { factData });
+          setError(`Error updating fact: ${error.message}`);
+          throw error;
+        }
+        console.log('Update successful, response:', data);
       } else {
-        // fallback: treat as super_admin
-        newDialogueData = { sequence: Number(newSequenceText), dialogue: newDialogueText, speaker: newSpeakerText };
+        console.log('Inserting new fact', { factData });
+        const { data, error } = await supabase
+          .from(tableName)
+          .insert([factData])
+          .select();
+
+        if (error) {
+          // Log full error object to help RLS debugging
+          console.error('Error inserting fact:', error, { factData });
+          setError(`Error inserting fact: ${error.message}`);
+          throw error;
+        }
+        console.log('Insert successful, response:', data);
       }
-      await addDialogue(newDialogueData);
-      setNewDialogueText('');
-      setNewSpeakerText('a'); // Reset to default Aji
-      setNewSequenceText('');
-      toast.success(effectiveRole === 'content_mod' ? 'Dialogue submitted for approval!' : 'Dialogue added successfully!');
-    } catch (err) {
-      setComponentError(err.message);
-      toast.error(`Error adding dialogue: ${err.message}`);
+
+      setShowModal(false);
+      await fetchFacts();
+    } catch (error) {
+      console.error('Error in handleSave:', error);
+      setError(`Error saving fact: ${error.message}`);
     }
   };
 
-  const handleApprove = async (dialogue) => {
+  // handleSave explanation:
+  // - Validates input, constructs a minimal payload (currently only `dialogue`)
+  // - For edits it runs an update where id = currentFact.id, and for new
+  //   facts it inserts a single row. Both paths call `.select()` so the
+  //   server returns the new/updated rows (useful for debugging).
+
+  const handleApprove = async (id) => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     try {
-      await updateDialogue(dialogue.id, { dialogue: dialogue.for_approval, for_approval: null });
-      toast.success('Dialogue approved!');
-    } catch (err) {
-      toast.error('Failed to approve dialogue.');
+      setError(null);
+      const { error } = await supabase
+        .from(tableName)
+        .update({ is_approved: true })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error approving fact:', error);
+        setError(`Error approving fact: ${error.message}`);
+        throw error;
+      }
+      await fetchFacts();
+    } catch (error) {
+      console.error('Error in handleApprove:', error);
+      setError(`Error approving fact: ${error.message}`);
     }
   };
 
-  const handleSuggest = (dialogue) => {
-    console.log('Suggest clicked for dialogue:', dialogue.id, dialogue);
-    setSuggestingId(dialogue.id);
-    setSuggestionText(dialogue.for_approval || '');
-  };
-
-  const handleSubmitSuggestion = async (dialogue) => {
-    console.log('Submitting suggestion for dialogue:', dialogue.id, 'with value:', suggestionText);
+  const handleDisapprove = async (id) => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
     try {
-      const result = await updateDialogue(dialogue.id, { for_approval: suggestionText });
-      console.log('updateDialogue result:', result);
-      toast.success('Suggestion submitted for approval!');
-      setSuggestingId(null);
-      setSuggestionText('');
-    } catch (err) {
-      toast.error('Failed to submit suggestion.');
+      setError(null);
+      const { error } = await supabase
+        .from(tableName)
+        .update({ is_approved: false })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error disapproving fact:', error);
+        setError(`Error disapproving fact: ${error.message}`);
+        throw error;
+      }
+      await fetchFacts();
+    } catch (error) {
+      console.error('Error in handleDisapprove:', error);
+      setError(`Error disapproving fact: ${error.message}`);
     }
   };
 
-  // Open drag modal and set initial order
-  const handleOpenRefactor = () => {
-    setDragDialogues([...dialogues].sort((a, b) => a.sequence - b.sequence));
-    setRefactorOpen(true);
-  };
+  const handleBan = async (id) => {
+    if (!tableName) {
+      setError('No table name specified.');
+      return;
+    }
+    // Try to set a `status` column to 'banned' if it exists. If the update
+    // fails (no such column or permission error), fall back to delete.
+    try {
+      setError(null);
+      const { error } = await supabase
+        .from(tableName)
+        .update({ status: 'banned' })
+        .eq('id', id);
 
-  // Refactor SortableDialogueRow to use useSortable inside the component
-  function SortableDialogueRow({ dialogue, index, handleUp, handleDown, disableUp, disableDown }) {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: dialogue.id.toString() });
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      zIndex: isDragging ? 2 : 1,
-    };
-    return (
-      <Paper
-        ref={setNodeRef}
-        style={style}
-        {...attributes}
-        {...listeners}
-        sx={{
-          p: 1.5,
-          mb: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          border: isDragging ? '2px dashed #8e24aa' : '1px solid #e0e0e0',
-          background: isDragging ? '#e3f2fd' : '#f9f9f9',
-          boxShadow: isDragging ? 4 : 1,
-          transition: 'background 0.2s, border 0.2s',
-          cursor: 'grab',
-        }}
-      >
-        <Box sx={{ pr: 1, color: '#888', display: 'flex', alignItems: 'center' }}>
-          <DragIndicatorIcon />
-        </Box>
-        <Typography variant="body1" sx={{ width: 32, textAlign: 'right', fontWeight: 500 }}>{index + 1}.</Typography>
-        <Typography variant="body2" sx={{ flex: 1 }}>{dialogue.dialogue}</Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 40, textAlign: 'center' }}>({dialogue.speaker})</Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', ml: 1 }}>
-          <IconButton size="small" onClick={handleUp} disabled={disableUp}>
-            <ArrowUpwardIcon fontSize="small" />
-          </IconButton>
-          <IconButton size="small" onClick={handleDown} disabled={disableDown}>
-            <ArrowDownwardIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      </Paper>
-    );
-  }
-
-  // Handle drag end (update dragDialogues order and reassign sequence numbers for UI feedback)
-  const onDragEnd = ({ active, over }) => {
-    if (active.id !== over?.id) {
-      const oldIndex = dragDialogues.findIndex(d => d.id.toString() === active.id);
-      const newIndex = dragDialogues.findIndex(d => d.id.toString() === over.id);
-      const newOrder = arrayMove(dragDialogues, oldIndex, newIndex).map((item, idx) => ({ ...item, sequence: idx + 1 }));
-      setDragDialogues(newOrder);
+      if (error) {
+        // If update fails, attempt delete as a fallback
+        console.warn('handleBan update failed, attempting delete:', error);
+        await handleDelete(id);
+        return;
+      }
+      await fetchFacts();
+    } catch (error) {
+      console.error('Error in handleBan:', error);
+      setError(`Error banning fact: ${error.message}`);
     }
   };
 
-  // Save new order
-const handleSaveRefactor = async () => {
-  setDragLoading(true); // Show one global loading indicator
-  try {
-    await Promise.all(
-      dragDialogues.map((dialogue, index) =>
-        updateDialogue(dialogue.id, { sequence: index + 1 })
-      )
-    );
-    toast.success('Sequences updated!');
-    setRefactorOpen(false);
-  } catch (err) {
-    toast.error('Failed to update sequences.');
-  } finally {
-    setDragLoading(false); // Hide the global loading indicator
-  }
-};
-
-
-  // Move sensors definition outside of the render/return so hooks are not called conditionally
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  // handleApprove explanation:
+  // - Marks the `is_approved` column true for the given id. UI shows the
+  //   Approve button only for users with `super_admin` role and when the fact
+  //   is currently not approved.
 
   if (loading) {
     return (
-        <Container maxWidth="lg">
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-            <CircularProgress />
-            <Typography variant="h6" sx={{ ml: 2 }}>Loading Dialogues...</Typography>
-          </Box>
-        </Container>
+      <div className="text-center p-5">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
     );
   }
 
-  // Open the delete confirmation dialog and set the dialogue to delete
-  const handleRequestDelete = (dialogue) => {
-    setDialogueToDelete(dialogue);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleCancelDelete = () => {
-    setDeleteDialogOpen(false);
-    setDialogueToDelete(null);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (dialogueToDelete) {
-      await handleDelete(dialogueToDelete.id);
-    }
-    setDeleteDialogOpen(false);
-    setDialogueToDelete(null);
-  };
-
   return (
-    <>
-      <Container maxWidth="lg">
-        <Typography variant="h4" gutterBottom>
-          Introduction Dialogue Management
-        </Typography>
-        {!currentUserRole && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Warning: No user role detected. Edit/Delete/Approve actions will be hidden.
-          </Alert>
-        )}
-
-        {/* Add New Dialogue Form */}
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            Add New Dialogue
-          </Typography>
-          <Typography variant="body1">Note: a = Aji Character, h = Harold Character</Typography>
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-            <TextField
-              label="Dialogue"
-              fullWidth required
-              value={newDialogueText}
-              onChange={(e) => setNewDialogueText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { // Allow adding by pressing Enter
-                  handleAdd();
-                }
-              }}
-            />
-            <FormControl  size="small" sx={{ minWidth: 120 }} required>
-              <InputLabel>Speaker</InputLabel>
-              <Select
-                value={newSpeakerText}
-                label="Speaker"
-                onChange={e => setNewSpeakerText(e.target.value)}
-              >
-                {speakers.map((speakerOption) => (
-                  <MenuItem key={speakerOption} value={speakerOption}>
-                    {speakerOption}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl  size="small" sx={{ minWidth: 120 }} required>
-              <InputLabel>Sequence</InputLabel>
-              <Select
-                value={newSequenceText}
-                label="Sequence"
-                onChange={e => setNewSequenceText(e.target.value)}
-              >
-                {availableSequences.map((sequenceOption) => (
-                  <MenuItem key={sequenceOption} value={sequenceOption}>
-                    {sequenceOption}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Button variant="contained" onClick={handleAdd}>
-              Add
+    <div className="historical-manage">
+      <Card>
+        <Card.Body>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h2>Manage Introduction Dialogue</h2>
+            <Button variant="primary" onClick={handleAdd}>
+              Add New Dialogue
             </Button>
-          </Box>
-        </Paper>
+          </div>
 
-        {/* Dialogues Table */}
-        <TableContainer component={Paper}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
-            <Button variant="outlined" color="secondary" onClick={handleOpenRefactor}>
-              Re-order Dialogues
-            </Button>
-          </Box>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Sequence</TableCell>
-                <TableCell>Speaker</TableCell>
-                <TableCell>Dialogue</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {dialogues.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} sx={{ textAlign: 'center', py: 3 }}>
-                    No dialogues found. Add one above!
-                  </TableCell>
-                </TableRow>
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              {error}
+            </div>
+          )}
+
+          <Table striped bordered hover responsive>
+            <thead>
+              <tr>
+                <th>Dialogue</th>
+                <th>Status</th>
+                <th>Actions</th>
+                <th>created_at</th>
+              </tr>
+            </thead>
+            <tbody>
+              {facts.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="text-center">No historical facts found.</td>
+                </tr>
               ) : (
-                dialogues.map((dialogue) => (
-                  <React.Fragment key={dialogue.id}>
-                    <TableRow>
-                      <TableCell>
-                        {editingId === dialogue.id ? (
-                          <TextField
-                            type="number"
-                            value={editForm.sequence}
-                            onChange={(e) => setEditForm({ ...editForm, sequence: parseInt(e.target.value) })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') { handleSave(); }
-                            }}
-                          />
-                        ) : (
-                          dialogue.sequence
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingId === dialogue.id ? (
-                          <FormControl fullWidth size="small">
-                            <InputLabel>Speaker</InputLabel>
-                            <Select
-                              value={editForm.speaker}
-                              label="Speaker"
-                              onChange={e => setEditForm({ ...editForm, speaker: e.target.value })}
-                            >
-                              {speakers.map((speakerOption) => (
-                                <MenuItem key={speakerOption} value={speakerOption}>
-                                  {speakerOption}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        ) : (
-                          dialogue.speaker
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingId === dialogue.id ? (
-                          <TextField
-                            fullWidth
-                            value={editForm.dialogue}
-                            onChange={(e) => setEditForm({ ...editForm, dialogue: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { handleSave(); } }}
-                          />
-                        ) : (
-                          <>
-                            {dialogue.dialogue}
-                            {dialogue.for_approval && (
-                              <Box sx={{ mt: 1, p: 1, background: '#fffde7', border: '1px dashed #fbc02d', borderRadius: 1 }}>
-                                <Typography variant="body2" color="warning.main">
-                                  <b>Pending Approval:</b> {dialogue.for_approval}
-                                </Typography>
-                              </Box>
-                            )}
-                          </>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingId === dialogue.id ? (
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <IconButton color="primary" onClick={handleSave}><SaveIcon /></IconButton>
-                            <IconButton color="secondary" onClick={() => setEditingId(null)}><CancelIcon /></IconButton>
-                          </Box>
-                        ) : (
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            {/* Actions Row: Delete, Approve (super_admin only) */}
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              {currentUserRole && currentUserRole.toLowerCase() === 'super_admin' && (
-                                <IconButton color="error" onClick={() => handleRequestDelete(dialogue)}><DeleteIcon /></IconButton>
-                              )}
-                              {currentUserRole && currentUserRole.toLowerCase() === 'super_admin' && dialogue.for_approval && (
-                                <>
-                                  <Button size="small" color="success" onClick={async () => {
-                                    // Approve: move for_approval to dialogue, clear for_approval, set is_approved true
-                                    try {
-                                      const { error } = await updateDialogue(dialogue.id, {
-                                        dialogue: dialogue.for_approval,
-                                        for_approval: null,
-                                        is_approved: true
-                                      });
-                                      if (!error) {
-                                        toast.success('Approved!');
-                                      } else {
-                                        toast.error('Approval failed');
-                                      }
-                                    } catch (err) {
-                                      toast.error('Approval failed');
-                                    }
-                                  }}>
-                                    Approve
-                                  </Button>
-                                  <Button size="small" color="error" variant="outlined" onClick={async () => {
-                                    // Disapprove: delete the row
-                                    if (window.confirm('Are you sure you want to disapprove and delete this pending approval?')) {
-                                      try {
-                                        const { error } = await deleteDialogue(dialogue.id);
-                                        if (!error) {
-                                          toast.success('Disapproved and deleted!');
-                                        } else {
-                                          toast.error('Disapprove failed');
-                                        }
-                                      } catch (err) {
-                                        toast.error('Disapprove failed');
-                                      }
-                                    }
-                                  }} style={{ marginLeft: 8 }}>
-                                    Disapprove
-                                  </Button>
-                                  <Button size="small" color="warning" variant="outlined" onClick={() => {
-                                    setEditingId(dialogue.id);
-                                    setEditForm({ ...dialogue, dialogue: dialogue.for_approval || '' });
-                                  }} style={{ marginLeft: 8 }}>
-                                    Edit
-                                  </Button>
-                                </>
-                              )}
-                            </Box>
-                            {/* Edit/Suggest Button logic */}
-                            {currentUserRole && currentUserRole.toLowerCase() === 'super_admin' && (
-                              <IconButton color="primary" onClick={() => handleEdit(dialogue)} style={{ alignSelf: 'flex-start' }}>
-                                <EditIcon />
-                              </IconButton>
-                            )}
-                            {currentUserRole && currentUserRole.toLowerCase() === 'content_mod' && (
-                              <Button size="small" color="primary" variant="outlined" onClick={() => handleSuggest(dialogue)} style={{ alignSelf: 'flex-start' }}>
-                                Suggest
-                              </Button>
-                            )}
-                          </Box>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    {/* Suggestion input row for content_mod */}
-                    {currentUserRole && currentUserRole.toLowerCase() === 'content_mod' && suggestingId === dialogue.id && (
-                      <TableRow>
-                        <TableCell colSpan={4} sx={{ background: '#f3e5f5' }}>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            <TextField
-                              size="small"
-                              label="Suggest new dialogue"
-                              value={suggestionText}
-                              onChange={e => setSuggestionText(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') handleSubmitSuggestion(dialogue); }}
-                              autoFocus
-                            />
-                            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                              <Button size="small" color="primary" variant="contained" onClick={() => handleSubmitSuggestion(dialogue)}>
-                                Submit
-                              </Button>
-                              <Button size="small" onClick={() => { setSuggestingId(null); setSuggestionText(''); }}>
-                                Cancel
-                              </Button>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </React.Fragment>
+                facts.map((fact) => (
+                  <tr key={fact.id}>
+                    <td>{fact.dialogue}</td>
+                    <td>{fact.is_approved ? 'Approved' : 'Pending Approval'}</td>
+                    <td>
+                      {currentUserRole === 'super_admin' ? (
+                        <div className="d-flex align-items-center">
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            className="me-2"
+                            onClick={() => handleEdit(fact)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline-warning"
+                            size="sm"
+                            className="me-2"
+                            onClick={async () => await handleBan(fact.id)}
+                          >
+                            Ban
+                          </Button>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={() => handleDelete(fact.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-muted small">No actions</span>
+                      )}
+                    </td>
+                    <td>
+                      {fact?.created_at ? new Date(fact.created_at).toLocaleString() : ''}
+                    </td>
+                  </tr>
                 ))
               )}
-            </TableBody>
+            </tbody>
           </Table>
-        </TableContainer>
-        <Dialog open={refactorOpen} onClose={() => setRefactorOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Reorder Dialogues</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Drag and drop to reorder dialogues. You can also use the up/down arrows. Click Save to update sequence numbers.
-            </DialogContentText>
-            <Box sx={{ mt: 2 }}>
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={onDragEnd}
-              >
-                <SortableContext items={dragDialogues.map(d => d.id.toString())} strategy={verticalListSortingStrategy}>
-                  {dragDialogues.map((dialogue, index) => (
-                    <SortableDialogueRow
-                      key={dialogue.id}
-                      dialogue={dialogue}
-                      index={index}
-                      handleUp={() => {
-                        if (index > 0) {
-                          const newOrder = Array.from(dragDialogues);
-                          const temp = newOrder[index - 1];
-                          newOrder[index - 1] = newOrder[index];
-                          newOrder[index] = temp;
-                          setDragDialogues(newOrder.map((item, idx) => ({ ...item, sequence: idx + 1 })));
-                        }
-                      }}
-                      handleDown={() => {
-                        if (index < dragDialogues.length - 1) {
-                          const newOrder = Array.from(dragDialogues);
-                          const temp = newOrder[index + 1];
-                          newOrder[index + 1] = newOrder[index];
-                          newOrder[index] = temp;
-                          setDragDialogues(newOrder.map((item, idx) => ({ ...item, sequence: idx + 1 })));
-                        }
-                      }}
-                      disableUp={index === 0}
-                      disableDown={index === dragDialogues.length - 1}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setRefactorOpen(false)} disabled={dragLoading}>Cancel</Button>
-            <Button onClick={handleSaveRefactor} color="primary" disabled={dragLoading}>
-              {dragLoading ? <CircularProgress size={20} /> : 'Save'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        </Card.Body>
+      </Card>
 
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogOpen} onClose={handleCancelDelete}>
-          <DialogTitle>Confirm Delete</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Are you sure you want to delete this dialogue?
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCancelDelete} color="primary">
+      <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal.Header closeButton>
+            <Modal.Title>{isEditing ? 'Edit Dialogue' : 'Add New Dialogue'}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group>
+              <Form.Label>Dialogue</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                value={currentFact.dialogue}
+                onChange={(e) => setCurrentFact({ ...currentFact, dialogue: e.target.value })}
+              />
+            </Form.Group>
+            {error && <div className="text-danger mt-2">{error}</div>}
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>
               Cancel
             </Button>
-            <Button onClick={handleConfirmDelete} color="error" variant="contained">
-              Delete
+            <div className="me-auto text-muted small">{!currentUserId && 'You must be signed in to save.'}</div>
+            <Button variant="primary" onClick={handleSave} disabled={!currentUserId}>
+              Save
             </Button>
-          </DialogActions>
-        </Dialog>
-      </Container>
-      <ToastContainer position="bottom-right" autoClose={5000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnOnHover draggable pauseOnHover />
-    </>
+        </Modal.Footer>
+      </Modal>
+    </div>
   );
 }
+
+export default HistoricalManage;

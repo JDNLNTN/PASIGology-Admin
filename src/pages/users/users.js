@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Alert } from 'react-bootstrap';
-import { supabase, fetchProfiles } from '../../services/supabasePlayer';
+import { supabase } from '../../services/supabase';
+import { fetchProfiles } from '../../services/supabasePlayer';
 import './users.css';
 
 // Users page (admin view)

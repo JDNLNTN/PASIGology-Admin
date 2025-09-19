@@ -7,8 +7,8 @@ function IntroductionOverview() {
 
   const dialoguePages = [
     { name: 'Introduction Dialogue', path: '/dialogue/introduction' },
-    { name: 'Living Room Dialogue', path: '/dialogue/livingroom' },
-    { name: 'Player Room Dialogue', path: '/dialogue/playerroom' },
+    //{ name: 'Living Room Dialogue', path: '/dialogue/livingroom' },
+  //  { name: 'Player Room Dialogue', path: '/dialogue/playerroom' },
    // { name: 'Mechanics Dialogue', path: '/dialogue/mechanics' },
   ];
 

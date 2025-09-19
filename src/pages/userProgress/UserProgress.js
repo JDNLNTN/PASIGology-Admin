@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, ProgressBar } from 'react-bootstrap';
-import { supabase } from '../../services/supabasePlayer';
+import { supabase } from '../../services/supabase';
 //still in error here will fix the user progress first
 function UserProgress() {
   const [users, setUsers] = useState([]);
