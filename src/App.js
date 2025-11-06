@@ -24,6 +24,7 @@ import CathedralQuizManage from './pages/quiz/manage/Cathedral';
 import DimasalangIdentificationManage from './pages/quiz/manage/DimasalangIdentification';
 import DimasalangMultipleChoice from './pages/quiz/manage/DimasalangMultipleChoice';
 import { AuthProvider } from './context/AuthContext';
+import HistoricalManage from './pages/dialogue/emmaculate_conception_church/emmaculatePop';
 
 function App() {
   return (
@@ -65,6 +66,7 @@ function App() {
                       <Route path="/quiz/manage/Cathedral" element={<CathedralQuizManage />} />
                       <Route path="/quiz/manage/DimasalangIdentification" element={<DimasalangIdentificationManage />} />
                       <Route path="/quiz/manage/DimasalangMultipleChoice" element={<DimasalangMultipleChoice />} />
+                      <Route path="/dialogue/emmaculate_conception_church/emmaculatePop" element={<HistoricalManage />} />
                     </Routes>
                   </div>
                 </div>

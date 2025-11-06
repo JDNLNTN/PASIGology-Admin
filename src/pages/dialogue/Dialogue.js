@@ -13,7 +13,7 @@ function Dialogue() {
     { name: 'Dimas-alang Bakery', path: '/dialogue/dimas_alang_bakery/DimasAlangBakeryOverview' },    
     { name: 'City Hall', path: '/dialogue/city-hall' },
     { name: 'Bahay na Tisa', path: '/dialogue/bahay-na-tisa' },
-    { name: 'Immaculate Conception Church', path: '/dialogue/emmaculate-conception-church-overview' },
+    { name: 'Emmaculate Conception Church', path: '/dialogue/emmaculate-conception-church-overview' },
     { name: 'Pasig City Museum', path: '/dialogue/pasig-city-museum' },
     { name: 'Revolving Tower', path: '/dialogue/revolving-tower' },
     { name: 'Pasig Palengke', path: '/dialogue/pasig-palengke' },
@@ -52,7 +52,7 @@ function Dialogue() {
                   <td>{scene.name}</td>
                   <td>
                     {(scene.name === 'Dimas-alang Bakery' ||
-                      scene.name === 'Immaculate Conception Church' ||
+                      scene.name === 'Emmaculate Conception Church' ||
                       scene.name === 'Introduction') ? (
                       <Button 
                         variant="primary" 

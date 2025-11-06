@@ -40,6 +40,13 @@ function HistoricalManage() {
     return /^(content(?:[_-]?mod(?:erator)?)?|contentmoderator|contentmod)$/.test(r);
   };
 
+  // Helper to recognize super admin role in multiple common formats
+  const isSuperAdmin = (role) => {
+    if (!role) return false;
+    const r = String(role).toLowerCase().trim().replace(/[-\s]/g, '_');
+    return r === 'super_admin' || r === 'superadmin';
+  };
+
   
 
   useEffect(() => {
@@ -133,8 +140,7 @@ function HistoricalManage() {
         if (localAdminId) userId = localAdminId;
       }
 
-      // Debug: log resolved role and ids so developers can see why a role may not match
-      console.debug('fetchCurrentUserRole resolved', { user, role, localRole, adminDataStr, userId });
+  // Debug logging removed in production - resolved role and ids are no longer logged here
 
       setCurrentUserId(userId || null);
       setCurrentUserRole(role || null);
@@ -230,9 +236,35 @@ function HistoricalManage() {
 
       // Let the database set `created_by` via a trigger (safer). Only send
       // the data the user is allowed to provide from the client.
+      // If the current user is a super_admin, auto-mark the row as approved.
+      // Resolve role from state first, then fall back to auth metadata and
+      // localStorage (mirrors fetchCurrentUserRole logic).
+      let roleForSave = currentUserRole;
+      if (!roleForSave) {
+        roleForSave = userData?.user?.user_metadata?.role || null;
+        if (!roleForSave && typeof window !== 'undefined') {
+          const localRole = localStorage.getItem('role');
+          if (localRole) roleForSave = localRole;
+          else {
+            try {
+              const adminDataStr = localStorage.getItem('adminData');
+              const adminData = adminDataStr ? JSON.parse(adminDataStr) : null;
+              if (adminData && adminData.role) roleForSave = adminData.role;
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
+
       const factData = {
         dialogue: currentFact.dialogue.trim()
       };
+
+      const normalizedRole = String(roleForSave || '').toLowerCase().replace(/[-\s]/g, '_');
+      if (normalizedRole === 'super_admin' || normalizedRole === 'superadmin') {
+        factData.is_approved = true;
+      }
 
       if (isEditing) {
         console.log('Updating existing fact with ID:', currentFact.id);
@@ -284,18 +316,45 @@ function HistoricalManage() {
       return;
     }
     try {
+      // Detailed debug: show which id and user are attempting the approve,
+      // and the local copy of the fact (helps detect id/type mismatches).
+      const existingFact = facts.find((f) => String(f.id) === String(id));
+      console.log('handleApprove start:', { id, currentUserId, currentUserRole, existingFact });
       setError(null);
-      const { error } = await supabase
+      // First try to set both is_approved and status (if status column exists)
+      let data, error;
+      ({ data, error } = await supabase
         .from(tableName)
-        .update({ is_approved: true })
-        .eq('id', id);
+        .update({ is_approved: true, status: 'approved' })
+        .eq('id', id)
+        .select());
+
+      console.log('handleApprove response (attempt with status):', { data, error });
+
+      // If status column doesn't exist or update failed, retry with only is_approved
+      if (error) {
+        console.warn('handleApprove: retrying without status due to error', error);
+        const retry = await supabase
+          .from(tableName)
+          .update({ is_approved: true })
+          .eq('id', id)
+          .select();
+        data = retry.data;
+        error = retry.error;
+        console.log('handleApprove response (retry):', retry);
+      }
 
       if (error) {
-        console.error('Error approving fact:', error);
+        console.error('Error approving fact after retries:', error);
         setError(`Error approving fact: ${error.message}`);
-        throw error;
+        return;
       }
-      await fetchFacts();
+
+      // Update local state immediately so UI reflects the change
+      setFacts((prev) => prev.map((f) => (String(f.id) === String(id) ? { ...f, is_approved: true, status: (data && data[0] && data[0].status) || 'approved' } : f)));
+
+      // If we didn't get rows returned, still refresh to be safe
+      if (!data || data.length === 0) await fetchFacts();
     } catch (error) {
       console.error('Error in handleApprove:', error);
       setError(`Error approving fact: ${error.message}`);
@@ -308,18 +367,40 @@ function HistoricalManage() {
       return;
     }
     try {
+      const existingFact = facts.find((f) => String(f.id) === String(id));
+      console.log('handleDisapprove start:', { id, currentUserId, currentUserRole, existingFact });
       setError(null);
-      const { error } = await supabase
+      // Try to set both is_approved and status to pending
+      let data, error;
+      ({ data, error } = await supabase
         .from(tableName)
-        .update({ is_approved: false })
-        .eq('id', id);
+        .update({ is_approved: false, status: 'pending' })
+        .eq('id', id)
+        .select());
+
+      console.log('handleDisapprove response (attempt with status):', { data, error });
 
       if (error) {
-        console.error('Error disapproving fact:', error);
-        setError(`Error disapproving fact: ${error.message}`);
-        throw error;
+        console.warn('handleDisapprove: retrying without status due to error', error);
+        const retry = await supabase
+          .from(tableName)
+          .update({ is_approved: false })
+          .eq('id', id)
+          .select();
+        data = retry.data;
+        error = retry.error;
+        console.log('handleDisapprove response (retry):', retry);
       }
-      await fetchFacts();
+
+      if (error) {
+        console.error('Error disapproving fact after retries:', error);
+        setError(`Error disapproving fact: ${error.message}`);
+        return;
+      }
+
+      setFacts((prev) => prev.map((f) => (String(f.id) === String(id) ? { ...f, is_approved: false, status: (data && data[0] && data[0].status) || 'pending' } : f)));
+
+      if (!data || data.length === 0) await fetchFacts();
     } catch (error) {
       console.error('Error in handleDisapprove:', error);
       setError(`Error disapproving fact: ${error.message}`);
@@ -378,32 +459,14 @@ function HistoricalManage() {
                 This prevents anonymous users or lower roles from opening the add modal.
                 We rely on the DB trigger to set `created_by` on insert; `created_by` is
                 used below to let content moderators edit their own rows. */}
-            {((currentUserId && (currentUserRole === 'super_admin' || isContentModerator(currentUserRole))) || (!currentUserId && isContentModerator(currentUserRole))) && (
+            {((currentUserId && (isSuperAdmin(currentUserRole) || isContentModerator(currentUserRole))) || (!currentUserId && isContentModerator(currentUserRole))) && (
               <Button variant="primary" onClick={handleAdd}>
                 Add New Dialogue
               </Button>
             )}
           </div>
 
-          {/* Debug banner: shows resolved role/id to help debug role-matching issues.
-              Visible when ?debug=1 is in the URL or when not in production. */}
-          {(() => {
-            try {
-              const params = new URLSearchParams(window.location.search);
-              const showDebug = params.get('debug') === '1' || process.env.NODE_ENV !== 'production';
-              if (!showDebug) return null;
-              return (
-                <div className="alert alert-secondary small" role="status">
-                  <strong>DEBUG:</strong> role={String(currentUserRole)} | id={String(currentUserId)} | isContentMod={String(isContentModerator(currentUserRole))}
-                  <br />
-                  <strong>FETCH:</strong> rows={fetchDebug.count} | error={String(fetchDebug.error)}
-                  {fetchDebug.sample ? <pre className="small mt-2" style={{maxHeight: 120, overflow:'auto'}}>{fetchDebug.sample}</pre> : null}
-                </div>
-              );
-            } catch (e) {
-              return null;
-            }
-          })()}
+          {/* Debug banner removed to avoid showing sensitive info in the UI. */}
 
           {error && (
             <div className="alert alert-danger" role="alert">
@@ -429,35 +492,49 @@ function HistoricalManage() {
                 facts.map((fact) => (
                   <tr key={fact.id}>
                     <td>{fact.dialogue}</td>
-                    <td>{fact.is_approved ? 'Approved' : 'Pending Approval'}</td>
+                    <td>{fact.status ? (String(fact.status).charAt(0).toUpperCase() + String(fact.status).slice(1)) : (fact.is_approved ? 'Approved' : 'Pending Approval')}</td>
                     <td>
-                      {currentUserRole === 'super_admin' ? (
-                        // super_admin sees full action set
-                        <div className="d-flex align-items-center">
-                          <Button
-                            variant="outline-primary"
-                            size="sm"
-                            className="me-2"
-                            onClick={() => handleEdit(fact)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline-warning"
-                            size="sm"
-                            className="me-2"
-                            onClick={async () => await handleBan(fact.id)}
-                          >
-                            Ban
-                          </Button>
-                          <Button
-                            variant="outline-danger"
-                            size="sm"
-                            onClick={() => handleDelete(fact.id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
+                      {isSuperAdmin(currentUserRole) ? (
+                        // For super_admin: if already approved, show only Unapprove;
+                        // otherwise show Edit / Approve / Delete.
+                        fact.is_approved ? (
+                          <div className="d-flex align-items-center">
+                            <Button
+                              variant="outline-warning"
+                              size="sm"
+                              className="me-2"
+                              onClick={async () => await handleDisapprove(fact.id)}
+                            >
+                              Unapprove
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="d-flex align-items-center">
+                            <Button
+                              variant="outline-primary"
+                              size="sm"
+                              className="me-2"
+                              onClick={() => handleEdit(fact)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline-success"
+                              size="sm"
+                              className="me-2"
+                              onClick={async () => await handleApprove(fact.id)}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={() => handleDelete(fact.id)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        )
                       ) : isContentModerator(currentUserRole) ? (
                         // content_moderator may view all rows but can only edit their own entries
                         // We assume the table includes a `created_by` column set by the DB trigger.

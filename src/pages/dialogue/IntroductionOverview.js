@@ -6,8 +6,8 @@ function IntroductionOverview() {
   const navigate = useNavigate();
 
   const dialoguePages = [
-    { name: 'Introduction Dialogue', path: '/dialogue/introduction' },
-    //{ name: 'Living Room Dialogue', path: '/dialogue/livingroom' },
+    { name: 'Girl NPC', path: '/dialogue/introduction' }, //the name in table is Introduction Dialogue
+    { name: 'Cat NPC', path: '/dialogue/livingroom' },
   //  { name: 'Player Room Dialogue', path: '/dialogue/playerroom' },
    // { name: 'Mechanics Dialogue', path: '/dialogue/mechanics' },
   ];

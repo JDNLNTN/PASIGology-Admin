@@ -28,6 +28,11 @@ CREATE POLICY select_intro_approved_or_owned
   USING (
     is_approved = true
     OR created_by = auth.uid()
+    -- Allow access when the JWT role is super_admin (explicit check)
+    OR (auth.jwt() ->> 'role') = 'super_admin'
+    -- Or when the user is listed in the helper user_roles table as either
+    -- a super_admin or a content_mod. Keeping both checks makes the policy
+    -- resilient whether you manage roles via JWT or via the user_roles table.
     OR EXISTS (
       SELECT 1
       FROM public.user_roles ur
