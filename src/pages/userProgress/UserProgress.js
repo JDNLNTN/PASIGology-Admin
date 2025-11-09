@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, ProgressBar } from 'react-bootstrap';
-import { supabase } from '../../services/supabase';
+import { supabase, supabasePlayer } from '../../services/supabase';
 //still in error here will fix the user progress first
 function UserProgress() {
   const [users, setUsers] = useState([]);
@@ -11,8 +11,8 @@ function UserProgress() {
 
   const fetchUserProgress = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profile')
+      const { data, error } = await supabasePlayer
+        .from('profiles')
         .select('*')
         .order('username', { ascending: true });
 

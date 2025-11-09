@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Alert } from 'react-bootstrap';
-import { supabase } from '../../services/supabase';
-import { fetchProfiles } from '../../services/supabasePlayer';
+import { supabase, supabasePlayer } from '../../services/supabase';
 import './users.css';
 
 // Users page (admin view)
@@ -38,49 +37,38 @@ function Users() {
 
             // Confirm there's a session (this uses the anon client). This is
             // mostly a sanity check — Supabase will still respond to anon requests.
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            // Use the correctly-cased `supabasePlayer` client exported from services/supabase.
+            const { data: { session }, error: sessionError } = await supabasePlayer.auth.getSession();
             if (sessionError) {
                 throw new Error('Authentication error');
             }
 
-            // Use fetchProfiles helper which tries likely table names and
-            // returns per-table diagnostics if nothing is found.
-            const result = await fetchProfiles({ table: 'profiles', select: '*' });
-            const { data, error, tableUsed } = result || {};
-
-            if (tableUsed) console.log('fetchProfiles used table:', tableUsed);
-
+            // Directly fetch profiles from the player client so we always use
+            // the player anon key and respect RLS policies.
+            const { data, error } = await supabasePlayer.from('profiles').select('*');
             if (error) {
-                // propagate a readable message to the UI
                 throw new Error(`Failed to load users: ${error.message || error}`);
             }
-
-            if (!data) {
-                throw new Error('No data received from the server');
-            }
-
+            const rows = data || [];
             // Log the raw payload to help debug differing schemas
-            console.log('Raw users payload:', data);
+            console.log('Raw users payload:', rows);
 
             // Normalize rows so the UI can rely on consistent keys.
-            const processedData = data.map(user => ({
-                // normalize id/user_id
+            const processedData = rows.map(user => ({
                 user_id: user.user_id || user.id || user.uid || null,
-                // normalize display name
                 char_name: user.char_name || user.username || user.name || '',
                 email: user.email || user.user_email || '',
                 age: user.age || null,
-                // map local gender codes to human-friendly values
                 gender: user.gender === 'iha' ? 'female' : user.gender === 'iho' ? 'male' : user.gender,
                 created_at: user.created_at || user.createdAt || null,
                 is_banned: !!(user.is_banned || user.banned || user.isBanned),
-                // keep raw row for debugging when things don't match
                 _raw: user
             }));
 
             console.log('Successfully received data:', processedData);
             setUsers(processedData);
             setError(null);
+
         } catch (err) {
             setError(err.message || 'Failed to load users');
         } finally {
@@ -105,13 +93,13 @@ function Users() {
     };
 
     // Action handlers: perform the backend update/delete and refresh the list.
-    // NOTE: these call the 'PASIGology' table — adjust if your table name differs.
+    // NOTE: these call the 'Profiles' table — adjust if your table name differs.
     const handleBanConfirm = async () => {
         try {
-            const { error } = await supabase
-                .from('PASIGology')
+            const { error } = await supabasePlayer
+                .from('profiles')
                 .update({ is_banned: true })
-                .eq('user_id', selectedUser.user_id);
+                .eq('id', selectedUser.user_id);
 
             if (error) {
                 throw new Error('Failed to ban user');
@@ -128,10 +116,10 @@ function Users() {
 
     const handleDeleteConfirm = async () => {
         try {
-            const { error } = await supabase
-                .from('PASIGology')
+            const { error } = await supabasePlayer
+                .from('profiles')
                 .delete()
-                .eq('user_id', selectedUser.user_id);
+                .eq('id', selectedUser.user_id);
 
             if (error) {
                 throw new Error('Failed to delete user');
@@ -148,10 +136,10 @@ function Users() {
 
     const handleUnbanConfirm = async () => {
         try {
-            const { error } = await supabase
-                .from('PASIGology')
+            const { error } = await supabasePlayer
+                .from('profiles')
                 .update({ is_banned: false })
-                .eq('user_id', selectedUser.user_id);
+                .eq('id', selectedUser.user_id);
 
             if (error) {
                 throw new Error('Failed to unban user');

@@ -1,453 +1,347 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Table, Button, Modal, Form, Dropdown, ButtonGroup } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, Table, Button, Modal, Form } from 'react-bootstrap';
 import { supabase } from '../../services/supabase';
 
-// HistoricalManage
-// This component provides a small admin UI to manage historical facts for a
-// specific table. The table name is pulled from the URL params (example:
-// /historical/manage/schema.table_name). The component supports:
-// - listing facts (select *)
-// - adding new facts (insert)
-// - editing existing facts (update)
-// - deleting facts (delete)
-// - approving facts (update is_approved)
-// Notes:
-// - The component uses the client-side Supabase anon key. Ensure RLS and
-//   policies allow the current role to perform the operations in development.
-// - The code assumes each record has `id`, `fact`, and `is_approved` fields.
+// HistoricalManage (refactored)
+// Responsibilities:
+// - List, create, edit, approve/disapprove, ban/delete introduction dialogue rows
+// - Use Supabase client for CRUD operations and respect RLS via anon key
+// - Provide clear separation between helpers (DB/role resolution) and UI handlers
 
 function HistoricalManage() {
-  const tableName = "intro";
+  const tableName = 'intro';
   const navigate = useNavigate();
-  // UI + data state
-  const [facts, setFacts] = useState([]); // list of fact rows from the DB
-  const [showModal, setShowModal] = useState(false); // modal visibility
-  const [currentFact, setCurrentFact] = useState({ id: null, dialogue: '' }); // editing/adding target
-  const [isEditing, setIsEditing] = useState(false); // whether modal is edit mode
-  const [error, setError] = useState(null); // user-visible errors
-  const [loading, setLoading] = useState(true); // initial loading spinner
-  const [currentUserRole, setCurrentUserRole] = useState(null); // used to gate actions
-  const [currentUserId, setCurrentUserId] = useState(null); // store auth.uid() for RLS
-  const [fetchDebug, setFetchDebug] = useState({ count: 0, sample: null, error: null });
 
-  // Helper to recognize multiple possible role strings for content moderators
-  // Accepts values like 'content_moderator', 'content-mod', 'content_mod', 'content_modERATOR', 'content_mod'
-  const isContentModerator = (role) => {
-    if (!role) return false;
-    const r = String(role).toLowerCase().trim();
-    // Match content_mod, content-moderator, contentmoderator, content_modERATOR, content_mod, contentmod
-    return /^(content(?:[_-]?mod(?:erator)?)?|contentmoderator|contentmod)$/.test(r);
-  };
+  // UI state
+  const [facts, setFacts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Helper to recognize super admin role in multiple common formats
+  // Modal state for add/edit
+  const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentFact, setCurrentFact] = useState({ id: null, dialogue: '' });
+
+  // Auth/role state
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserRole, setCurrentUserRole] = useState(null);
+
+  // --------------------
+  // Role helpers
+  // --------------------
+  const _normalizeRole = (role) => (role ? String(role).toLowerCase().trim().replace(/[-\s]/g, '_') : '');
+
   const isSuperAdmin = (role) => {
-    if (!role) return false;
-    const r = String(role).toLowerCase().trim().replace(/[-\s]/g, '_');
+    const r = _normalizeRole(role);
     return r === 'super_admin' || r === 'superadmin';
   };
 
-  
+  const isContentModerator = (role) => {
+    if (!role) return false;
+    const r = String(role).toLowerCase().trim();
+    return /^(content(?:[_-]?mod(?:erator)?)?|contentmoderator|contentmod)$/.test(r);
+  };
 
-  useEffect(() => {
-    if (!tableName) {
-      setError('No table name specified in the URL.');
-      setLoading(false);
-      return;
-    }
-  // Load facts for the current table and determine the current user's role
-  // (role is used to show/hide admin actions like Edit/Approve/Delete).
-  fetchFacts();
-  fetchCurrentUserRole();
-  }, [tableName]);
-
-  const fetchFacts = async () => {
-    if (!tableName) {
-      setError('No table name specified.');
-      setLoading(false);
-      return;
-    }
+  // --------------------
+  // Supabase helpers
+  // --------------------
+  const resolveCurrentUser = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-      console.log('Fetching from table:', tableName);
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .order('id', { ascending: true });
-
+      const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.error('Error fetching facts:', error);
-        setError(`Error fetching facts: ${error.message}`);
-        throw error;
+        console.debug('supabase.auth.getUser error:', error);
+        return { id: null, role: null };
+      }
+      const user = data?.user || null;
+      let role = user?.user_metadata?.role || null;
+
+      // fallback to localStorage (login flow may have stored role/adminData)
+      if (!role && typeof window !== 'undefined') {
+        role = localStorage.getItem('role') || (() => {
+          try {
+            const adminDataStr = localStorage.getItem('adminData');
+            const adminData = adminDataStr ? JSON.parse(adminDataStr) : null;
+            return (adminData && adminData.role) ? adminData.role : null;
+          } catch (e) {
+            return null;
+          }
+        })();
       }
 
-      console.log('Fetched data:', data);
-      setFacts(data || []);
-      try {
-        setFetchDebug({ count: (data || []).length, sample: JSON.stringify((data || []).slice(0, 5), null, 2), error: null });
-      } catch (e) {
-        setFetchDebug({ count: (data || []).length, sample: null, error: null });
+      let userId = user?.id || null;
+      if (!userId && typeof window !== 'undefined') {
+        userId = localStorage.getItem('admin_id') || null;
       }
+
+      return { id: userId, role };
     } catch (err) {
-      console.error('Error fetching facts:', err.message);
-      setError(`Error fetching facts: ${err.message}`);
-      setFetchDebug({ count: 0, sample: null, error: err.message });
+      console.error('resolveCurrentUser failed:', err);
+      return { id: null, role: null };
+    }
+  }, []);
+
+  const fetchFacts = useCallback(async () => {
+    if (!tableName) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error } = await supabase.from(tableName).select('*').order('id', { ascending: true });
+      if (error) throw error;
+      setFacts(data || []);
+    } catch (err) {
+      console.error('fetchFacts error:', err);
+      setError(err.message || 'Failed to load facts');
     } finally {
       setLoading(false);
     }
-  };
+  }, [tableName]);
 
-  // fetchFacts explanation:
-  // - Reads all rows using `select('*')` from the table name provided in the
-  //   route. The route must include a fully-qualified identifier (schema.table)
-  //   if your DB requires it. If the fetch fails, the error is displayed above
-  //   the table and logged to the console for debugging.
-
-  const fetchCurrentUserRole = async () => {
+  // Generic update helper which returns { data, error }
+  const runUpdate = async (payload, id = null) => {
     try {
-      const { data } = await supabase.auth.getUser();
-      // data.user may be null if not signed in
-      const user = data?.user || null;
-
-      // Prefer role stored in Supabase user_metadata, but fall back to
-      // values saved to localStorage during login (the app stores admin
-      // info there). This covers the standard login flow used in this app
-      // where `adminData.role` and `role` are persisted locally.
-      let role = user?.user_metadata?.role || null;
-      let localRole = null;
-      let adminDataStr = null;
-      if (!role && typeof window !== 'undefined') {
-        // localStorage keys used in the app: 'role', 'adminData'
-        localRole = localStorage.getItem('role');
-        if (localRole) role = localRole;
-        else {
-          try {
-            adminDataStr = localStorage.getItem('adminData');
-            const adminData = adminDataStr ? JSON.parse(adminDataStr) : null;
-            if (adminData && adminData.role) role = adminData.role;
-          } catch (e) {
-            // ignore JSON parse errors
-          }
-        }
+      if (id) {
+        return await supabase.from(tableName).update(payload).eq('id', id).select();
       }
-
-      // Determine current user id: prefer supabase user id, fall back to
-      // localStorage 'admin_id' (set by the Login flow).
-      let userId = user?.id || null;
-      if (!userId && typeof window !== 'undefined') {
-        const localAdminId = localStorage.getItem('admin_id');
-        if (localAdminId) userId = localAdminId;
-      }
-
-  // Debug logging removed in production - resolved role and ids are no longer logged here
-
-      setCurrentUserId(userId || null);
-      setCurrentUserRole(role || null);
-    } catch (error) {
-      console.error('Error fetching current user role:', error);
-      setError('Error fetching current user role');
+      return await supabase.from(tableName).insert([payload]).select();
+    } catch (err) {
+      return { data: null, error: err };
     }
   };
 
-  // fetchCurrentUserRole explanation:
-  // - Uses the Supabase auth client to retrieve the current user's metadata.
-  // - This assumes the `user_metadata` contains a `role` property. If your
-  //   authentication flow stores role information elsewhere, update this.
+  const runDelete = async (id) => {
+    try {
+      return await supabase.from(tableName).delete().eq('id', id).select();
+    } catch (err) {
+      return { data: null, error: err };
+    }
+  };
 
-  const handleAdd = () => {
-  setCurrentFact({ id: null, dialogue: '' });
+  // --------------------
+  // Lifecycle
+  // --------------------
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!tableName) {
+        setError('No table specified');
+        setLoading(false);
+        return;
+      }
+      const user = await resolveCurrentUser();
+      if (!mounted) return;
+      setCurrentUserId(user.id);
+      setCurrentUserRole(user.role);
+      await fetchFacts();
+    })();
+    return () => { mounted = false; };
+  }, [fetchFacts, resolveCurrentUser, tableName]);
+
+  // --------------------
+  // Handlers
+  // --------------------
+  const openAddModal = () => {
+    setCurrentFact({ id: null, dialogue: '' });
     setIsEditing(false);
     setShowModal(true);
     setError(null);
   };
 
-  // handleAdd explanation:
-  // - Prepares the modal for inserting a new fact by clearing `currentFact`.
-
-  const handleEdit = (fact) => {
-    setCurrentFact(fact);
+  const openEditModal = (fact) => {
+    setCurrentFact(fact || { id: null, dialogue: '' });
     setIsEditing(true);
     setShowModal(true);
     setError(null);
   };
 
-  // handleEdit explanation:
-  // - Puts the selected fact into edit-mode and opens the modal so the user
-  //   can update the text. The `currentFact` object is bound to the textarea.
-
-  const handleDelete = async (id) => {
-    if (!tableName) {
-      setError('No table name specified.');
-      return;
-    }
-    if (window.confirm('Are you sure you want to delete this fact?')) {
-      try {
-        setError(null);
-        const { error } = await supabase
-          .from(tableName)
-          .delete()
-          .eq('id', id);
-
-        if (error) {
-          console.error('Error deleting fact:', error);
-          setError(`Error deleting fact: ${error.message}`);
-          throw error;
-        }
-        await fetchFacts();
-      } catch (error) {
-        console.error('Error in handleDelete:', error);
-        setError(`Error deleting fact: ${error.message}`);
-      }
-    }
-  };
-
-  // handleDelete explanation:
-  // - Confirms with the user, then issues a DELETE where id = provided id.
-  // - On success it refreshes the list. Permission/RLS failures will be
-  //   surfaced as errors that you can inspect in the console or the alert.
-
   const handleSave = async () => {
-    if (!tableName) {
-      setError('No table name specified.');
-      return;
-    }
+    if (!tableName) return setError('No table specified');
+    if (!currentFact.dialogue || !currentFact.dialogue.trim()) return setError('Dialogue cannot be empty');
+    setError(null);
     try {
-      setError(null);
-      console.log('Attempting to save to table:', tableName);
-      console.log('Current fact data:', currentFact);
+      const { id, dialogue } = currentFact;
+      const user = await resolveCurrentUser();
+      let payload = { dialogue: dialogue.trim() };
+      const normalizedRole = _normalizeRole(user.role || currentUserRole);
+      if (normalizedRole === 'super_admin' || normalizedRole === 'superadmin') payload.is_approved = true;
 
-      // ensure non-empty
-      if (!currentFact.dialogue || !currentFact.dialogue.trim()) {
-        setError('Dialogue cannot be empty');
+      const res = await runUpdate(payload, id);
+      if (res.error) {
+        console.error('handleSave update error:', res.error);
+        setError(res.error.message || 'Failed to save');
         return;
       }
-
-  // refresh current user to ensure auth.uid() is available at save time
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) console.debug('supabase.auth.getUser error:', userError);
-  const savingUserId = userData?.user?.id || null;
-  console.debug('Saving as user id:', savingUserId);
-
-      if (!savingUserId) {
-        setError('You must be signed in to save a dialogue.');
-        return;
-      }
-
-      // Let the database set `created_by` via a trigger (safer). Only send
-      // the data the user is allowed to provide from the client.
-      // If the current user is a super_admin, auto-mark the row as approved.
-      // Resolve role from state first, then fall back to auth metadata and
-      // localStorage (mirrors fetchCurrentUserRole logic).
-      let roleForSave = currentUserRole;
-      if (!roleForSave) {
-        roleForSave = userData?.user?.user_metadata?.role || null;
-        if (!roleForSave && typeof window !== 'undefined') {
-          const localRole = localStorage.getItem('role');
-          if (localRole) roleForSave = localRole;
-          else {
-            try {
-              const adminDataStr = localStorage.getItem('adminData');
-              const adminData = adminDataStr ? JSON.parse(adminDataStr) : null;
-              if (adminData && adminData.role) roleForSave = adminData.role;
-            } catch (e) {
-              // ignore
-            }
-          }
-        }
-      }
-
-      const factData = {
-        dialogue: currentFact.dialogue.trim()
-      };
-
-      const normalizedRole = String(roleForSave || '').toLowerCase().replace(/[-\s]/g, '_');
-      if (normalizedRole === 'super_admin' || normalizedRole === 'superadmin') {
-        factData.is_approved = true;
-      }
-
-      if (isEditing) {
-        console.log('Updating existing fact with ID:', currentFact.id);
-        const { data, error } = await supabase
-          .from(tableName)
-          .update(factData)
-          .eq('id', currentFact.id)
-          .select();
-
-        if (error) {
-          console.error('Error updating fact:', error, { factData });
-          setError(`Error updating fact: ${error.message}`);
-          throw error;
-        }
-        console.log('Update successful, response:', data);
-      } else {
-        console.log('Inserting new fact', { factData });
-        const { data, error } = await supabase
-          .from(tableName)
-          .insert([factData])
-          .select();
-
-        if (error) {
-          // Log full error object to help RLS debugging
-          console.error('Error inserting fact:', error, { factData });
-          setError(`Error inserting fact: ${error.message}`);
-          throw error;
-        }
-        console.log('Insert successful, response:', data);
-      }
-
       setShowModal(false);
       await fetchFacts();
-    } catch (error) {
-      console.error('Error in handleSave:', error);
-      setError(`Error saving fact: ${error.message}`);
+    } catch (err) {
+      console.error('handleSave error:', err);
+      setError(err.message || 'Save failed');
     }
   };
 
-  // handleSave explanation:
-  // - Validates input, constructs a minimal payload (currently only `dialogue`)
-  // - For edits it runs an update where id = currentFact.id, and for new
-  //   facts it inserts a single row. Both paths call `.select()` so the
-  //   server returns the new/updated rows (useful for debugging).
-
-  const handleApprove = async (id) => {
-    if (!tableName) {
-      setError('No table name specified.');
-      return;
-    }
+  const handleDelete = async (id) => {
+    if (!tableName) return setError('No table specified');
     try {
-      // Detailed debug: show which id and user are attempting the approve,
-      // and the local copy of the fact (helps detect id/type mismatches).
-      const existingFact = facts.find((f) => String(f.id) === String(id));
-      console.log('handleApprove start:', { id, currentUserId, currentUserRole, existingFact });
-      setError(null);
-      // First try to set both is_approved and status (if status column exists)
-      let data, error;
-      ({ data, error } = await supabase
-        .from(tableName)
-        .update({ is_approved: true, status: 'approved' })
-        .eq('id', id)
-        .select());
+      const proceed = isSuperAdmin(currentUserRole) ? true : window.confirm('Are you sure you want to delete this fact?');
+      if (!proceed) return;
+      // Resolve user and log for diagnostics
+      const user = await resolveCurrentUser();
+      console.debug('handleDelete: attempting delete', { tableName, id, actingUser: user, currentUserRole });
 
-      console.log('handleApprove response (attempt with status):', { data, error });
+      // Fetch the row before attempting delete so we can detect ownership/type issues
+      const { data: existingRow, error: fetchErr } = await supabase.from(tableName).select('*').eq('id', id).maybeSingle();
+      if (fetchErr) console.debug('handleDelete: error fetching row before delete:', fetchErr);
+      console.debug('handleDelete: fetched row before delete:', existingRow);
 
-      // If status column doesn't exist or update failed, retry with only is_approved
-      if (error) {
-        console.warn('handleApprove: retrying without status due to error', error);
-        const retry = await supabase
-          .from(tableName)
-          .update({ is_approved: true })
-          .eq('id', id)
-          .select();
-        data = retry.data;
-        error = retry.error;
-        console.log('handleApprove response (retry):', retry);
-      }
-
-      if (error) {
-        console.error('Error approving fact after retries:', error);
-        setError(`Error approving fact: ${error.message}`);
+      if (!existingRow) {
+        // If there's no matching row by id, report this explicitly
+        setError('Delete aborted: no row found with the provided id. The id may have a different type (string vs number) or the row was already removed. Check the console for details.');
         return;
       }
 
-      // Update local state immediately so UI reflects the change
-      setFacts((prev) => prev.map((f) => (String(f.id) === String(id) ? { ...f, is_approved: true, status: (data && data[0] && data[0].status) || 'approved' } : f)));
+      // Log id types to help detect mismatches (e.g., uuid vs int)
+      console.debug('handleDelete: id types', { providedIdType: typeof id, rowIdType: typeof existingRow.id });
 
-      // If we didn't get rows returned, still refresh to be safe
-      if (!data || data.length === 0) await fetchFacts();
-    } catch (error) {
-      console.error('Error in handleApprove:', error);
-      setError(`Error approving fact: ${error.message}`);
+      // If the current user is a super_admin, prefer a server-side admin endpoint
+      // that performs the delete with the service role key. This avoids RLS
+      // blocking the operation and does an explicit authorization check on the server.
+      if (isSuperAdmin(currentUserRole)) {
+        try {
+          // Get a fresh access token for the current user and forward it to the server
+          const session = await supabase.auth.getSession();
+          const token = session?.data?.session?.access_token;
+          if (!token) {
+            setError('Unable to get access token for authorization. Please sign out and sign back in.');
+            return;
+          }
+
+          const resp = await fetch('/api/admin/delete-intro', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ id }),
+          });
+          const payload = await resp.json();
+          if (!resp.ok) {
+            console.error('Server delete endpoint responded with error:', payload);
+            setError((payload && payload.error && payload.error.message) ? payload.error.message : (payload && payload.error) ? String(payload.error) : 'Server delete failed');
+            return;
+          }
+          console.log('Deleted rows (server):', payload.data);
+          if (!payload.data || payload.data.length === 0) {
+            setError('Server performed delete but returned no rows. Check server logs for details.');
+            return;
+          }
+          await fetchFacts();
+          return;
+        } catch (serverErr) {
+          console.error('Error calling server delete endpoint:', serverErr);
+          setError('Server delete failed. See console for details.');
+          return;
+        }
+      }
+
+      // Non-super-admin path: attempt client-side delete (subject to RLS)
+      const res = await runDelete(id);
+      if (res.error) {
+        console.error('handleDelete error:', res.error, { tableName, id, actingUser: user });
+        const msg = (res.error && res.error.message) ? String(res.error.message) : '';
+        if (/permission|policy|not authorized|forbidden/i.test(msg)) {
+          setError('Delete failed due to permissions (Row Level Security). If you are a super_admin, ensure your JWT includes role = "super_admin" or perform deletes via a server-side admin endpoint. See console for full error object.');
+        } else {
+          setError(res.error.message || 'Failed to delete');
+        }
+        return;
+      }
+
+      // Supabase may return an empty array when no rows were deleted.
+      console.log('Deleted rows:', res.data);
+      if (!res.data || res.data.length === 0) {
+        const owner = existingRow.created_by;
+        const actingId = user?.id || null;
+        console.debug('handleDelete: row owner vs acting user', { owner, actingId, currentUserRole });
+        if (String(owner) !== String(actingId)) {
+          setError('Delete did not remove the row. Likely cause: Row-Level Security prevented deletion because you are not the owner.');
+        } else {
+          setError('Delete did not remove the row. No rows returned from delete. See console for details.');
+        }
+        return;
+      }
+
+      await fetchFacts();
+    } catch (err) {
+      console.error('handleDelete unexpected error:', err);
+      setError(err.message || 'Delete failed');
+    }
+  };
+
+  const handleApprove = async (id) => {
+    if (!tableName) return setError('No table specified');
+    try {
+      // try set both is_approved and status, fallback to is_approved only
+      const attempt = await supabase.from(tableName).update({ is_approved: true, status: 'approved' }).eq('id', id).select();
+      if (attempt.error) {
+        const retry = await supabase.from(tableName).update({ is_approved: true }).eq('id', id).select();
+        if (retry.error) {
+          console.error('handleApprove failed:', retry.error);
+          setError(retry.error.message || 'Approve failed');
+          return;
+        }
+      }
+      setFacts((prev) => prev.map((f) => (String(f.id) === String(id) ? { ...f, is_approved: true } : f)));
+      await fetchFacts();
+    } catch (err) {
+      console.error('handleApprove unexpected error:', err);
+      setError(err.message || 'Approve failed');
     }
   };
 
   const handleDisapprove = async (id) => {
-    if (!tableName) {
-      setError('No table name specified.');
-      return;
-    }
+    if (!tableName) return setError('No table specified');
     try {
-      const existingFact = facts.find((f) => String(f.id) === String(id));
-      console.log('handleDisapprove start:', { id, currentUserId, currentUserRole, existingFact });
-      setError(null);
-      // Try to set both is_approved and status to pending
-      let data, error;
-      ({ data, error } = await supabase
-        .from(tableName)
-        .update({ is_approved: false, status: 'pending' })
-        .eq('id', id)
-        .select());
-
-      console.log('handleDisapprove response (attempt with status):', { data, error });
-
-      if (error) {
-        console.warn('handleDisapprove: retrying without status due to error', error);
-        const retry = await supabase
-          .from(tableName)
-          .update({ is_approved: false })
-          .eq('id', id)
-          .select();
-        data = retry.data;
-        error = retry.error;
-        console.log('handleDisapprove response (retry):', retry);
+      const attempt = await supabase.from(tableName).update({ is_approved: false, status: 'pending' }).eq('id', id).select();
+      if (attempt.error) {
+        const retry = await supabase.from(tableName).update({ is_approved: false }).eq('id', id).select();
+        if (retry.error) {
+          console.error('handleDisapprove failed:', retry.error);
+          setError(retry.error.message || 'Disapprove failed');
+          return;
+        }
       }
-
-      if (error) {
-        console.error('Error disapproving fact after retries:', error);
-        setError(`Error disapproving fact: ${error.message}`);
-        return;
-      }
-
-      setFacts((prev) => prev.map((f) => (String(f.id) === String(id) ? { ...f, is_approved: false, status: (data && data[0] && data[0].status) || 'pending' } : f)));
-
-      if (!data || data.length === 0) await fetchFacts();
-    } catch (error) {
-      console.error('Error in handleDisapprove:', error);
-      setError(`Error disapproving fact: ${error.message}`);
+      setFacts((prev) => prev.map((f) => (String(f.id) === String(id) ? { ...f, is_approved: false } : f)));
+      await fetchFacts();
+    } catch (err) {
+      console.error('handleDisapprove unexpected error:', err);
+      setError(err.message || 'Disapprove failed');
     }
   };
 
   const handleBan = async (id) => {
-    if (!tableName) {
-      setError('No table name specified.');
-      return;
-    }
-    // Try to set a `status` column to 'banned' if it exists. If the update
-    // fails (no such column or permission error), fall back to delete.
+    if (!tableName) return setError('No table specified');
     try {
-      setError(null);
-      const { error } = await supabase
-        .from(tableName)
-        .update({ status: 'banned' })
-        .eq('id', id);
-
-      if (error) {
-        // If update fails, attempt delete as a fallback
-        console.warn('handleBan update failed, attempting delete:', error);
+      const res = await supabase.from(tableName).update({ status: 'banned' }).eq('id', id);
+      if (res.error) {
+        console.warn('handleBan update failed; attempting delete:', res.error);
         await handleDelete(id);
         return;
       }
       await fetchFacts();
-    } catch (error) {
-      console.error('Error in handleBan:', error);
-      setError(`Error banning fact: ${error.message}`);
+    } catch (err) {
+      console.error('handleBan error:', err);
+      setError(err.message || 'Ban failed');
     }
   };
 
-  // handleApprove explanation:
-  // - Marks the `is_approved` column true for the given id. UI shows the
-  //   Approve button only for users with `super_admin` role and when the fact
-  //   is currently not approved.
-
-  if (loading) {
-    return (
-      <div className="text-center p-5">
-        <div className="spinner-border" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    );
-  }
+  // --------------------
+  // Render
+  // --------------------
+  if (loading) return (
+    <div className="text-center p-5">
+      <div className="spinner-border" role="status"><span className="visually-hidden">Loading...</span></div>
+    </div>
+  );
 
   return (
     <div className="historical-manage">
@@ -455,24 +349,12 @@ function HistoricalManage() {
         <Card.Body>
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h2>Manage Introduction Dialogue</h2>
-            {/* Only allow adding when signed-in and role is super_admin or content_moderator.
-                This prevents anonymous users or lower roles from opening the add modal.
-                We rely on the DB trigger to set `created_by` on insert; `created_by` is
-                used below to let content moderators edit their own rows. */}
             {((currentUserId && (isSuperAdmin(currentUserRole) || isContentModerator(currentUserRole))) || (!currentUserId && isContentModerator(currentUserRole))) && (
-              <Button variant="primary" onClick={handleAdd}>
-                Add New Dialogue
-              </Button>
+              <Button variant="primary" onClick={openAddModal}>Add New Dialogue</Button>
             )}
           </div>
 
-          {/* Debug banner removed to avoid showing sensitive info in the UI. */}
-
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          )}
+          {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
           <Table striped bordered hover responsive>
             <thead>
@@ -485,83 +367,33 @@ function HistoricalManage() {
             </thead>
             <tbody>
               {facts.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="text-center">No historical facts found.</td>
-                </tr>
-              ) : (
-                facts.map((fact) => (
-                  <tr key={fact.id}>
-                    <td>{fact.dialogue}</td>
-                    <td>{fact.status ? (String(fact.status).charAt(0).toUpperCase() + String(fact.status).slice(1)) : (fact.is_approved ? 'Approved' : 'Pending Approval')}</td>
-                    <td>
-                      {isSuperAdmin(currentUserRole) ? (
-                        // For super_admin: if already approved, show only Unapprove;
-                        // otherwise show Edit / Approve / Delete.
-                        fact.is_approved ? (
-                          <div className="d-flex align-items-center">
-                            <Button
-                              variant="outline-warning"
-                              size="sm"
-                              className="me-2"
-                              onClick={async () => await handleDisapprove(fact.id)}
-                            >
-                              Unapprove
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="d-flex align-items-center">
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              className="me-2"
-                              onClick={() => handleEdit(fact)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline-success"
-                              size="sm"
-                              className="me-2"
-                              onClick={async () => await handleApprove(fact.id)}
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() => handleDelete(fact.id)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        )
-                      ) : isContentModerator(currentUserRole) ? (
-                        // content_moderator may view all rows but can only edit their own entries
-                        // We assume the table includes a `created_by` column set by the DB trigger.
-                        (currentUserId && fact?.created_by && String(currentUserId) === String(fact.created_by)) ? (
-                          <div className="d-flex align-items-center">
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              className="me-2"
-                              onClick={() => handleEdit(fact)}
-                            >
-                              Edit
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-muted small">No actions</span>
-                        )
+                <tr><td colSpan="4" className="text-center">No historical facts found.</td></tr>
+              ) : facts.map((fact) => (
+                <tr key={fact.id}>
+                  <td>{fact.dialogue}</td>
+                  <td>{fact.status ? (String(fact.status).charAt(0).toUpperCase() + String(fact.status).slice(1)) : (fact.is_approved ? 'Approved' : 'Pending Approval')}</td>
+                  <td>
+                    {isSuperAdmin(currentUserRole) ? (
+                      fact.is_approved ? (
+                        <div className="d-flex align-items-center">
+                          <Button variant="outline-warning" size="sm" className="me-2" onClick={() => handleDisapprove(fact.id)}>Unapprove</Button>
+                        </div>
                       ) : (
-                        <span className="text-muted small">No actions</span>
-                      )}
-                    </td>
-                    <td>
-                      {fact?.created_at ? new Date(fact.created_at).toLocaleString() : ''}
-                    </td>
-                  </tr>
-                ))
-              )}
+                        <div className="d-flex align-items-center">
+                          <Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(fact)}>Edit</Button>
+                          <Button variant="outline-success" size="sm" className="me-2" onClick={() => handleApprove(fact.id)}>Approve</Button>
+                          <Button variant="outline-danger" size="sm" onClick={() => handleDelete(fact.id)}>Delete</Button>
+                        </div>
+                      )
+                    ) : isContentModerator(currentUserRole) ? (
+                      (currentUserId && fact?.created_by && String(currentUserId) === String(fact.created_by)) ? (
+                        <div className="d-flex align-items-center"><Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(fact)}>Edit</Button></div>
+                      ) : <span className="text-muted small">No actions</span>
+                    ) : <span className="text-muted small">No actions</span>}
+                  </td>
+                  <td>{fact?.created_at ? new Date(fact.created_at).toLocaleString() : ''}</td>
+                </tr>
+              ))}
             </tbody>
           </Table>
         </Card.Body>
@@ -569,30 +401,21 @@ function HistoricalManage() {
 
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
-            <Modal.Title>{isEditing ? 'Edit Dialogue' : 'Add New Dialogue'}</Modal.Title>
+          <Modal.Title>{isEditing ? 'Edit Dialogue' : 'Add New Dialogue'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
             <Form.Group>
               <Form.Label>Dialogue</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                value={currentFact.dialogue}
-                onChange={(e) => setCurrentFact({ ...currentFact, dialogue: e.target.value })}
-              />
+              <Form.Control as="textarea" rows={3} value={currentFact.dialogue} onChange={(e) => setCurrentFact({ ...currentFact, dialogue: e.target.value })} />
             </Form.Group>
             {error && <div className="text-danger mt-2">{error}</div>}
           </Form>
         </Modal.Body>
         <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              Cancel
-            </Button>
-            <div className="me-auto text-muted small">{!currentUserId && 'You must be signed in to save.'}</div>
-            <Button variant="primary" onClick={handleSave} disabled={!currentUserId}>
-              Save
-            </Button>
+          <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
+          <div className="me-auto text-muted small">{!currentUserId && 'You must be signed in to save.'}</div>
+          <Button variant="primary" onClick={handleSave} disabled={!currentUserId}>Save</Button>
         </Modal.Footer>
       </Modal>
     </div>
