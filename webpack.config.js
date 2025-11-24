@@ -55,6 +55,14 @@ module.exports = {
         { from: /^\//, to: '/index.html' }
       ]
     },
+    proxy: [
+      {
+        context: ['/api'],
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        logLevel: 'debug'
+      }
+    ],
     static: {
       directory: path.join(__dirname, 'public'),
       serveIndex: false

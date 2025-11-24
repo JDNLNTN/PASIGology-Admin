@@ -21,7 +21,7 @@ function HistoricalManage() {
   // Modal state for add/edit
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [currentFact, setCurrentFact] = useState({ id: null, dialogue: '' });
+  const [currentFact, setCurrentFact] = useState({ id: null, dialogue: '', sequence: ' ' });
 
   // Auth/role state
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -141,14 +141,14 @@ function HistoricalManage() {
   // Handlers
   // --------------------
   const openAddModal = () => {
-    setCurrentFact({ id: null, dialogue: '' });
+    setCurrentFact({ id: null, dialogue: '', sequence: ' ' });
     setIsEditing(false);
     setShowModal(true);
     setError(null);
   };
 
   const openEditModal = (fact) => {
-    setCurrentFact(fact || { id: null, dialogue: '' });
+    setCurrentFact(fact || { id: null, dialogue: '', sequence: ' ' });
     setIsEditing(true);
     setShowModal(true);
     setError(null);
@@ -180,102 +180,75 @@ function HistoricalManage() {
   };
 
   const handleDelete = async (id) => {
-    if (!tableName) return setError('No table specified');
-    try {
-      const proceed = isSuperAdmin(currentUserRole) ? true : window.confirm('Are you sure you want to delete this fact?');
-      if (!proceed) return;
-      // Resolve user and log for diagnostics
-      const user = await resolveCurrentUser();
-      console.debug('handleDelete: attempting delete', { tableName, id, actingUser: user, currentUserRole });
+  if (!tableName) {
+    setError('No table specified');
+    return;
+  }
 
-      // Fetch the row before attempting delete so we can detect ownership/type issues
-      const { data: existingRow, error: fetchErr } = await supabase.from(tableName).select('*').eq('id', id).maybeSingle();
-      if (fetchErr) console.debug('handleDelete: error fetching row before delete:', fetchErr);
-      console.debug('handleDelete: fetched row before delete:', existingRow);
+  try {
+    // Confirm delete unless user is super admin
+    const proceed = isSuperAdmin(currentUserRole) || window.confirm('Are you sure you want to delete this fact?');
+    if (!proceed) return;
 
-      if (!existingRow) {
-        // If there's no matching row by id, report this explicitly
-        setError('Delete aborted: no row found with the provided id. The id may have a different type (string vs number) or the row was already removed. Check the console for details.');
-        return;
-      }
+    // Fetch row before delete (helps with ownership/type issues)
+    const { data: existingRow, error: fetchErr } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
-      // Log id types to help detect mismatches (e.g., uuid vs int)
-      console.debug('handleDelete: id types', { providedIdType: typeof id, rowIdType: typeof existingRow.id });
-
-      // If the current user is a super_admin, prefer a server-side admin endpoint
-      // that performs the delete with the service role key. This avoids RLS
-      // blocking the operation and does an explicit authorization check on the server.
-      if (isSuperAdmin(currentUserRole)) {
-        try {
-          // Get a fresh access token for the current user and forward it to the server
-          const session = await supabase.auth.getSession();
-          const token = session?.data?.session?.access_token;
-          if (!token) {
-            setError('Unable to get access token for authorization. Please sign out and sign back in.');
-            return;
-          }
-
-          const resp = await fetch('/api/admin/delete-intro', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ id }),
-          });
-          const payload = await resp.json();
-          if (!resp.ok) {
-            console.error('Server delete endpoint responded with error:', payload);
-            setError((payload && payload.error && payload.error.message) ? payload.error.message : (payload && payload.error) ? String(payload.error) : 'Server delete failed');
-            return;
-          }
-          console.log('Deleted rows (server):', payload.data);
-          if (!payload.data || payload.data.length === 0) {
-            setError('Server performed delete but returned no rows. Check server logs for details.');
-            return;
-          }
-          await fetchFacts();
-          return;
-        } catch (serverErr) {
-          console.error('Error calling server delete endpoint:', serverErr);
-          setError('Server delete failed. See console for details.');
-          return;
-        }
-      }
-
-      // Non-super-admin path: attempt client-side delete (subject to RLS)
-      const res = await runDelete(id);
-      if (res.error) {
-        console.error('handleDelete error:', res.error, { tableName, id, actingUser: user });
-        const msg = (res.error && res.error.message) ? String(res.error.message) : '';
-        if (/permission|policy|not authorized|forbidden/i.test(msg)) {
-          setError('Delete failed due to permissions (Row Level Security). If you are a super_admin, ensure your JWT includes role = "super_admin" or perform deletes via a server-side admin endpoint. See console for full error object.');
-        } else {
-          setError(res.error.message || 'Failed to delete');
-        }
-        return;
-      }
-
-      // Supabase may return an empty array when no rows were deleted.
-      console.log('Deleted rows:', res.data);
-      if (!res.data || res.data.length === 0) {
-        const owner = existingRow.created_by;
-        const actingId = user?.id || null;
-        console.debug('handleDelete: row owner vs acting user', { owner, actingId, currentUserRole });
-        if (String(owner) !== String(actingId)) {
-          setError('Delete did not remove the row. Likely cause: Row-Level Security prevented deletion because you are not the owner.');
-        } else {
-          setError('Delete did not remove the row. No rows returned from delete. See console for details.');
-        }
-        return;
-      }
-
-      await fetchFacts();
-    } catch (err) {
-      console.error('handleDelete unexpected error:', err);
-      setError(err.message || 'Delete failed');
+    if (fetchErr) {
+      console.error('Error fetching row before delete:', fetchErr);
+      setError('Failed to fetch row before delete');
+      return;
     }
-  };
+
+    if (!existingRow) {
+      setError('No row found with the provided id. It may already be deleted or the id type mismatched.');
+      return;
+    }
+
+    console.debug('Row before delete:', existingRow);
+
+    // Attempt delete (subject to RLS)
+    const { data: deletedRows, error: deleteErr } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('id', id)
+      .select();
+
+    if (deleteErr) {
+      console.error('Delete error:', deleteErr);
+      const msg = deleteErr.message || '';
+      if (/permission|policy|not authorized|forbidden/i.test(msg)) {
+        setError('Delete failed due to Row Level Security. You may not be the owner of this row.');
+      } else {
+        setError(msg || 'Failed to delete');
+      }
+      return;
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      // No rows deleted — likely RLS blocked it
+      const owner = existingRow.created_by;
+      const actingId = (await resolveCurrentUser())?.id || null;
+      console.debug('Row owner vs acting user:', { owner, actingId, currentUserRole });
+
+      if (String(owner) !== String(actingId)) {
+        setError('Delete blocked: you are not the owner of this row.');
+      } else {
+        setError('Delete did not remove the row. Check console for details.');
+      }
+      return;
+    }
+
+    console.log('Deleted rows:', deletedRows);
+    await fetchFacts();
+  } catch (err) {
+    console.error('Unexpected delete error:', err);
+    setError(err.message || 'Delete failed');
+  }
+};
 
   const handleApprove = async (id) => {
     if (!tableName) return setError('No table specified');
@@ -356,68 +329,124 @@ function HistoricalManage() {
 
           {error && <div className="alert alert-danger" role="alert">{error}</div>}
 
-          <Table striped bordered hover responsive>
-            <thead>
-              <tr>
-                <th>Dialogue</th>
-                <th>Status</th>
-                <th>Actions</th>
-                <th>created_at</th>
-              </tr>
-            </thead>
-            <tbody>
-              {facts.length === 0 ? (
-                <tr><td colSpan="4" className="text-center">No historical facts found.</td></tr>
-              ) : facts.map((fact) => (
-                <tr key={fact.id}>
-                  <td>{fact.dialogue}</td>
-                  <td>{fact.status ? (String(fact.status).charAt(0).toUpperCase() + String(fact.status).slice(1)) : (fact.is_approved ? 'Approved' : 'Pending Approval')}</td>
-                  <td>
-                    {isSuperAdmin(currentUserRole) ? (
-                      fact.is_approved ? (
-                        <div className="d-flex align-items-center">
-                          <Button variant="outline-warning" size="sm" className="me-2" onClick={() => handleDisapprove(fact.id)}>Unapprove</Button>
-                        </div>
-                      ) : (
-                        <div className="d-flex align-items-center">
-                          <Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(fact)}>Edit</Button>
-                          <Button variant="outline-success" size="sm" className="me-2" onClick={() => handleApprove(fact.id)}>Approve</Button>
-                          <Button variant="outline-danger" size="sm" onClick={() => handleDelete(fact.id)}>Delete</Button>
-                        </div>
-                      )
-                    ) : isContentModerator(currentUserRole) ? (
-                      (currentUserId && fact?.created_by && String(currentUserId) === String(fact.created_by)) ? (
-                        <div className="d-flex align-items-center"><Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(fact)}>Edit</Button></div>
-                      ) : <span className="text-muted small">No actions</span>
-                    ) : <span className="text-muted small">No actions</span>}
-                  </td>
-                  <td>{fact?.created_at ? new Date(fact.created_at).toLocaleString() : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+         <Table striped bordered hover responsive>
+  <thead>
+    <tr>
+      <th>Sequence</th>
+      <th>Dialogue</th>
+      <th>Status</th>
+      <th>Actions</th>
+      <th>created_at</th>
+    </tr>
+  </thead>
+  <tbody>
+    {facts.length === 0 ? (
+      <tr>
+        <td colSpan="5" className="text-center">No historical facts found.</td>
+      </tr>
+    ) : facts.map((fact) => (
+      <tr key={fact.id}>
+        {/* Show sequence number here */}
+        <td>{fact.sequence}</td>
+
+        {/* Dialogue text */}
+        <td>{fact.dialogue}</td>
+
+        {/* Status */}
+        <td>
+          {fact.status
+            ? (String(fact.status).charAt(0).toUpperCase() + String(fact.status).slice(1))
+            : (fact.is_approved ? 'Approved' : 'Pending Approval')}
+        </td>
+
+        {/* Actions */}
+        <td>
+          {isSuperAdmin(currentUserRole) ? (
+            fact.is_approved ? (
+              <div className="d-flex align-items-center">
+                <Button variant="outline-warning" size="sm" className="me-2" onClick={() => handleDisapprove(fact.id)}>Unapprove</Button>
+              </div>
+            ) : (
+              <div className="d-flex align-items-center">
+                <Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(fact)}>Edit</Button>
+                <Button variant="outline-success" size="sm" className="me-2" onClick={() => handleApprove(fact.id)}>Approve</Button>
+                <Button variant="outline-danger" size="sm" onClick={() => handleDelete(fact.id)}>Delete</Button>
+              </div>
+            )
+          ) : isContentModerator(currentUserRole) ? (
+            (currentUserId && fact?.created_by && String(currentUserId) === String(fact.created_by)) ? (
+              <div className="d-flex align-items-center">
+                <Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(fact)}>Edit</Button>
+              </div>
+            ) : <span className="text-muted small">No actions</span>
+          ) : <span className="text-muted small">No actions</span>}
+        </td>
+
+        {/* Created at */}
+        <td>{fact?.created_at ? new Date(fact.created_at).toLocaleString() : ''}</td>
+      </tr>
+    ))}
+  </tbody>
+</Table> 
         </Card.Body>
       </Card>
 
-      <Modal show={showModal} onHide={() => setShowModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>{isEditing ? 'Edit Dialogue' : 'Add New Dialogue'}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group>
-              <Form.Label>Dialogue</Form.Label>
-              <Form.Control as="textarea" rows={3} value={currentFact.dialogue} onChange={(e) => setCurrentFact({ ...currentFact, dialogue: e.target.value })} />
-            </Form.Group>
-            {error && <div className="text-danger mt-2">{error}</div>}
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
-          <div className="me-auto text-muted small">{!currentUserId && 'You must be signed in to save.'}</div>
-          <Button variant="primary" onClick={handleSave} disabled={!currentUserId}>Save</Button>
-        </Modal.Footer>
-      </Modal>
+<Modal show={showModal} onHide={() => setShowModal(false)}>
+  <Modal.Header closeButton>
+    <Modal.Title>{isEditing ? 'Edit Dialogue' : 'Add New Dialogue'}</Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    <Form>
+      {/* Sequence field */}
+      <Form.Group className="mb-3">
+        <Form.Label>Sequence</Form.Label>
+        <Form.Control
+          type="number"
+          value={currentFact.sequence ?? ''}
+          onChange={(e) =>
+            setCurrentFact({
+              ...currentFact,
+              sequence: e.target.value
+            })
+          }
+        />
+        <Form.Text className="text-muted">
+          Enter the sequence number to control ordering
+        </Form.Text>
+      </Form.Group>
+
+      {/* Dialogue field */}
+      <Form.Group>
+        <Form.Label>Dialogue</Form.Label>
+        <Form.Control
+          as="textarea"
+          rows={3}
+          value={currentFact.dialogue}
+          onChange={(e) =>
+            setCurrentFact({ ...currentFact, dialogue: e.target.value })
+          }
+        />
+      </Form.Group>
+
+      {error && <div className="text-danger mt-2">{error}</div>}
+    </Form>
+  </Modal.Body>
+  <Modal.Footer>
+    <Button variant="secondary" onClick={() => setShowModal(false)}>
+      Cancel
+    </Button>
+    <div className="me-auto text-muted small">
+      {!currentUserId && 'You must be signed in to save.'}
+    </div>
+    <Button
+      variant="primary"
+      onClick={handleSave}
+      disabled={!currentUserId}
+    >
+      Save
+    </Button>
+  </Modal.Footer>
+</Modal>
     </div>
   );
 }
