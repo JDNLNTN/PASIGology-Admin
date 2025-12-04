@@ -17,9 +17,9 @@ function Dialogue() {
     },
     {
       name: 'Church',
-      overviewPath: '/dialogue/emmaculate-conception-church-overview',
+      overviewPath: '/dialogue/emmaculate-conception-church',
       children: [
-        { name: 'Augmented reality church info', path: '/dialogue/emmaculate-conception-church-overview', status: 'available' },
+        { name: 'Augmented reality church info', path: '/dialogue/emmaculate-conception-church', status: 'available' },
         { name: 'Gallery church info', path: '/dialogue/emmaculate-conception-church-gallery', status: 'available' },
       ],
     },
@@ -41,9 +41,9 @@ function Dialogue() {
     },
     {
       name: 'Dimas alang',
-      overviewPath: '/dialogue/dimas_alang_bakery/DimasAlangBakeryOverview',
+      overviewPath: '/dialogue/dimas_alang_bakery/augmentic',
       children: [
-        { name: 'Augmented reality Dimas alang info', path: '/dialogue/dimas_alang_bakery/DimasAlangBakeryOverview', status: 'available' },
+        { name: 'Augmented reality Dimas alang info', path: '/dialogue/dimas_alang_bakery/augmentic', status: 'available' },
         { name: 'Gallery Dimas alang info', path: '/dialogue/dimas_alang_bakery/gallery', status: 'available' },
       ],
     },

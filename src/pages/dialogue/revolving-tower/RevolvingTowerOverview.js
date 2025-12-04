@@ -1,12 +1,14 @@
 import React from 'react';
-import { useAuth } from '../../../context/AuthContext';
+import GalleryInfoManager from '../../../components/GalleryInfoManager';
 
 export default function RevolvingTowerOverview() {
-  const { role } = useAuth();
   return (
-    <div>
-      <h3>Augmented reality Revolving Tower info</h3>
-      <p>Role: {String(role)}</p>
-    </div>
+    <GalleryInfoManager
+      table="gallery_info_rev"
+      title="Gallery Revolving Tower info"
+      textField="dialogue"
+      textLabel="Info"
+      newTextPlaceholder="New info..."
+    />
   );
 }

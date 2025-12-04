@@ -1,11 +1,11 @@
 import React from 'react';
 import GalleryInfoManager from '../../../components/GalleryInfoManager';
 
-export default function BahayNaTisaGallery() {
+export default function EmmaculateConceptionChurchOverview() {
   return (
     <GalleryInfoManager
-      table="bnt_info"
-      title="Bahay na tisa info"
+      table="church_info"
+      title="Emmaculate Conception Church"
       textField="dialogue"
       textLabel="Info"
       newTextPlaceholder="New info..."

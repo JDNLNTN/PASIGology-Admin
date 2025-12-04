@@ -1,12 +1,14 @@
 import React from 'react';
-import { useAuth } from '../../../context/AuthContext';
+import GalleryInfoManager from '../../../components/GalleryInfoManager';
 
-export default function PlazaRizalOverview() {
-  const { role } = useAuth();
+export default function PlazaRizalGallery() {
   return (
-    <div>
-      <h3>Augmented reality Plaza Rizal info</h3>
-      <p>Role: {String(role)}</p>
-    </div>
+    <GalleryInfoManager
+      table="plaza_rizal_info"
+      title="Augmented reality Plaza Rizal info"
+      textField="dialogue"
+      textLabel="Info"
+      newTextPlaceholder="New info..."
+    />
   );
 }

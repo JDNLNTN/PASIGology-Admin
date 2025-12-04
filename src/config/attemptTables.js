@@ -3,9 +3,10 @@
 // Keep this file small and commit-safe.
 
 export const ENABLED_ATTEMPT_TABLES = [
-  // If your Supabase project contains these tables, uncomment them.
-  // 'attempt_dimas_alangbakery_identification_scores',
-  // 'attempt_dimas_alangbakery_multiple_scores',
-  // 'attempt_plazarizal_scores',
-  // 'attempt_immaculate_scores',
+  // Enable the attempt tables that exist in your Supabase project.
+  'attempt_plazarizal_scores',
+  'attempt_immaculate_scores',
+  'attempt_bahaynatisa_scores',
+  'attempt_dimas_alangbakery_identification_scores',
+  'attempt_revolving_tower_scores',
 ];
