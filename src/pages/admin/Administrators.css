@@ -409,7 +409,47 @@
 }
 
 .administrators .alert {
+    /* Position the alert fixed at the top center of the viewport */
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    /* Constrain width so it looks good on desktop and mobile */
+    width: calc(100% - 40px);
+    max-width: 760px;
+
+    /* Keep previous visuals */
     border-radius: 6px;
     border: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-} 
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+    /* Ensure it sits above other elements */
+    z-index: 1050;
+}
+
+/* Slightly increase the top offset for small screens to avoid overlap with the navbar */
+@media (max-width: 576px) {
+    .administrators .alert {
+        top: 12px;
+        width: calc(100% - 24px);
+        max-width: none;
+        padding: 0.6rem 0.9rem;
+        font-size: 0.95rem;
+    }
+}
+
+/* Ensure Bootstrap ToastContainer placed at top-center sits above content and is centered */
+.administrators .toast-container,
+.administrators .toast-container .toast {
+    z-index: 1050 !important;
+}
+.administrators .toast-container {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    pointer-events: none; /* allow clicks to pass through empty areas */
+}
+.administrators .toast-container .toast {
+    pointer-events: auto;
+}

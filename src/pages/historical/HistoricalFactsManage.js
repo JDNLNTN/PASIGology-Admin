@@ -7,6 +7,13 @@ import HistoricalManage from './HistoricalManage';
 function HistoricalFactsManage() {
   const { tableName } = useParams();
   const navigate = useNavigate();
+  // If someone navigates to /historical/facts without the tableName param,
+  // redirect back to the /historical index to avoid showing an error page.
+  useEffect(() => {
+    if (!tableName) {
+      navigate('/historical');
+    }
+  }, [tableName, navigate]);
   const [facts, setFacts] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [currentFact, setCurrentFact] = useState({ id: null, fact: '' });
