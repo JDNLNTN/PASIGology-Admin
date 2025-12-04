@@ -10,21 +10,25 @@ import QuizStats from './pages/quiz/stats/QuizStats';
 import UserProgress from './pages/userProgress/UserProgress';
 import Users from './pages/users/users'; // restored import (matches file name)
 import Sidebar from './components/Sidebar';
-import IntroductionDialogue from './pages/dialogue/introduction';
-import IntroductionOverview from './pages/dialogue/IntroductionOverview';
-import EmmaculateConceptionChurchOverview from './pages/dialogue/emmaculate_conception_church/EmmaculateConceptionChurchOverview.js';
+import IntroductionGallery from './pages/dialogue/introduction/IntroductionGallery';
+import EmmaculateConceptionChurchGallery from './pages/dialogue/emmaculate_conception_church/EmmaculateConceptionChurchGallery';
+import PlazaRizalOverview from './pages/dialogue/plaza-rizal/PlazaRizalOverview';
+import PlazaRizalGallery from './pages/dialogue/plaza-rizal/PlazaRizalGallery';
+import BahayNaTisaOverview from './pages/dialogue/bahay-na-tisa/BahayNaTisaOverview';
+import BahayNaTisaGallery from './pages/dialogue/bahay-na-tisa/BahayNaTisaGallery';
 import Login from './pages/auth/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 import SupabaseTest from './components/SupabaseTest';
-import DimasAlangBakeryOverview from './pages/dialogue/dimas_alang_bakery/DimasAlangBakeryOverview';
+import DimasAlangBakeryGallery from './pages/dialogue/dimas_alang_bakery/DimasAlangBakeryGallery';
+import RevolvingTowerOverview from './pages/dialogue/revolving-tower/RevolvingTowerOverview';
+import RevolvingTowerGallery from './pages/dialogue/revolving-tower/RevolvingTowerGallery';
 import CreateAdmin from './pages/admin/CreateAdmin';
 import QuizPlazaSequence from './pages/quiz/manage/QuizPlazaSequence';
 import CathedralQuizManage from './pages/quiz/manage/Cathedral';
 import DimasalangIdentificationManage from './pages/quiz/manage/DimasalangIdentification';
 import DimasalangMultipleChoice from './pages/quiz/manage/DimasalangMultipleChoice';
 import { AuthProvider } from './context/AuthContext';
-import HistoricalManage from './pages/dialogue/emmaculate_conception_church/emmaculatePop';
 
 function App() {
   return (
@@ -58,15 +62,19 @@ function App() {
                       <Route path="/quiz/stats/:tableName" element={<QuizStats />} />
                       <Route path="/userprogress" element={<UserProgress />} />
                       <Route path="/users" element={<Users />} />
-                      <Route path="/dialogue/introduction" element={<IntroductionDialogue />} />
-                      <Route path="/dialogue/introduction-overview" element={<IntroductionOverview />} />
-                      <Route path="/dialogue/emmaculate-conception-church-overview" element={<EmmaculateConceptionChurchOverview />} />
-                      <Route path="/dialogue/dimas_alang_bakery/DimasAlangBakeryOverview" element={<DimasAlangBakeryOverview />} />
+                      <Route path="/dialogue/introduction-gallery" element={<IntroductionGallery />} />
+                      <Route path="/dialogue/emmaculate-conception-church-gallery" element={<EmmaculateConceptionChurchGallery />} />
+                      <Route path="/dialogue/plaza-rizal" element={<PlazaRizalOverview />} />
+                      <Route path="/dialogue/plaza-rizal-gallery" element={<PlazaRizalGallery />} />
+                      <Route path="/dialogue/bahay-na-tisa" element={<BahayNaTisaOverview />} />
+                      <Route path="/dialogue/bahay-na-tisa-gallery" element={<BahayNaTisaGallery />} />
+                      <Route path="/dialogue/dimas_alang_bakery/gallery" element={<DimasAlangBakeryGallery />} />
+                      <Route path="/dialogue/revolving-tower" element={<RevolvingTowerOverview />} />
+                      <Route path="/dialogue/revolving-tower-gallery" element={<RevolvingTowerGallery />} />
                       <Route path="/quiz/manage/QuizPlazaSequence" element={<QuizPlazaSequence />} />
                       <Route path="/quiz/manage/Cathedral" element={<CathedralQuizManage />} />
                       <Route path="/quiz/manage/DimasalangIdentification" element={<DimasalangIdentificationManage />} />
                       <Route path="/quiz/manage/DimasalangMultipleChoice" element={<DimasalangMultipleChoice />} />
-                      <Route path="/dialogue/emmaculate_conception_church/emmaculatePop" element={<HistoricalManage />} />
                     </Routes>
                   </div>
                 </div>

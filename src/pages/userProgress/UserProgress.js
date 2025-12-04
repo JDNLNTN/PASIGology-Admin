@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, ProgressBar } from 'react-bootstrap';
+import { Card, Table, ProgressBar, Tabs, Tab } from 'react-bootstrap';
 import { supabase, supabasePlayer } from '../../services/supabase';
+import AchievementsTab from './AchievementsTab';
 //still in error here will fix the user progress first
 function UserProgress() {
   const [users, setUsers] = useState([]);
@@ -11,13 +12,40 @@ function UserProgress() {
 
   const fetchUserProgress = async () => {
     try {
-      const { data, error } = await supabasePlayer
-        .from('profiles')
-        .select('*')
-        .order('username', { ascending: true });
+      // Fetch profiles (id, username, email) and player progress, then join by id
+      const [profilesRes, progressRes] = await Promise.all([
+        supabasePlayer
+          .from('profiles')
+          .select('id, username, email')
+          .order('username', { ascending: true }),
+        supabasePlayer
+          .from('player_progress')
+          .select('user_id, bakery_done, church_done, rizal_done, tisa_done, tower_done'),
+      ]);
 
-      if (error) throw error;
-      setUsers(data || []);
+      if (profilesRes.error) throw profilesRes.error;
+      if (progressRes.error) throw progressRes.error;
+
+      const profiles = profilesRes.data || [];
+      const progressRows = progressRes.data || [];
+
+      const progressByUserId = new Map(progressRows.map((r) => [r.user_id, r]));
+
+      const combined = profiles.map((p) => {
+        const pr = progressByUserId.get(p.id) || {};
+        return {
+          id: p.id,
+          username: p.username,
+          email: p.email,
+          bakery_done: pr.bakery_done ?? null,
+          church_done: pr.church_done ?? null,
+          rizal_done: pr.rizal_done ?? null,
+          tisa_done: pr.tisa_done ?? null,
+          tower_done: pr.tower_done ?? null,
+        };
+      });
+
+      setUsers(combined);
     } catch (error) {
       console.error('Error fetching user progress:', error);
     }
@@ -25,23 +53,21 @@ function UserProgress() {
 
   const calculateProgress = (user) => {
     const locations = [
-      'emmacula',
-      'plazarizal',
-      'dimas_ala',
-      'cityhall',
-      'bahaynatis',
-      'pasigcitym',
-      'pasig_pale',
-      'rainforest_',
-      'arcovia',
-      'the_pariar'
+      'bakery_done',
+      'church_done',
+      'rizal_done',
+      'tisa_done',
+      'tower_done',
     ];
 
-    const completedLocations = locations.filter(location => {
-      // Convert the value to boolean explicitly
-      return Boolean(user[location]);
-    });
-    
+    const isComplete = (code) => {
+      if (code == null) return false;
+      const c = String(code).trim().toLowerCase();
+      return c === 'o' || c === 'v' || c === 's';
+    };
+
+    const completedLocations = locations.filter((location) => isComplete(user[location]));
+
     const progress = (completedLocations.length / locations.length) * 100;
     return progress;
   };
@@ -55,17 +81,13 @@ function UserProgress() {
 
   // Add this function to debug the values
   const debugUserProgress = (user) => {
-    console.log('User:', user.username);
-    console.log('emmacula:', user.emmacula);
-    console.log('plazarizal:', user.plazarizal);
-    console.log('dimas_ala:', user.dimas_ala);
-    console.log('cityhall:', user.cityhall);
-    console.log('bahaynatis:', user.bahaynatis);
-    console.log('pasigcitym:', user.pasigcitym);
-    console.log('pasig_pale:', user.pasig_pale);
-    console.log('rainforest_:', user.rainforest_);
-    console.log('arcovia:', user.arcovia);
-    console.log('the_pariar:', user.the_pariar);
+    console.log('User id:', user.id);
+    console.log('Username:', user.username);
+    console.log('bakery_done:', user.bakery_done);
+    console.log('church_done:', user.church_done);
+    console.log('rizal_done:', user.rizal_done);
+    console.log('tisa_done:', user.tisa_done);
+    console.log('tower_done:', user.tower_done);
   };
 
   return (
@@ -79,37 +101,44 @@ function UserProgress() {
               <p className="text-muted">There are no users in the progress table.</p>
             </div>
           ) : (
-            <Table striped bordered hover responsive>
-              <thead>
-                <tr>
-                  <th>Username</th>
-                  <th>Progress</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => {
-                  // Debug the user data
-                  debugUserProgress(user);
-                  
-                  const progress = calculateProgress(user);
-                  return (
-                    <tr key={user.id}>
-                      <td>{user.username}</td>
-                      <td>
-                        <div className="d-flex align-items-center">
-                          <ProgressBar
-                            now={progress}
-                            variant={getProgressVariant(progress)}
-                            className="flex-grow-1 me-2"
-                            label={`${Math.round(progress)}%`}
-                          />
-                        </div>
-                      </td>
+            <Tabs defaultActiveKey="progress" id="user-progress-tabs" className="mb-3">
+              <Tab eventKey="progress" title="Progress">
+                <Table striped bordered hover responsive>
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>Progress</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => {
+                      // Debug the user data
+                      debugUserProgress(user);
+
+                      const progress = calculateProgress(user);
+                      return (
+                        <tr key={user.id ?? `${user.username || user.email || 'unknown'}-row`}>
+                          <td>{user.username || user.email || 'Unknown'}</td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <ProgressBar
+                                now={progress}
+                                variant={getProgressVariant(progress)}
+                                className="flex-grow-1 me-2"
+                                label={`${Math.round(progress)}%`}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </Tab>
+              <Tab eventKey="achievements" title="Achievements">
+                <AchievementsTab users={users} />
+              </Tab>
+            </Tabs>
           )}
         </Card.Body>
       </Card>

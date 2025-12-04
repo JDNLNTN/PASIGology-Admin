@@ -116,7 +116,7 @@ function Dashboard() {
     const [playerGenderPercent, setPlayerGenderPercent] = useState({});
     const [playerAgeGroups, setPlayerAgeGroups] = useState({});
     const [playerAttemptsSummary, setPlayerAttemptsSummary] = useState(null);
-    const [playerEntriesTimeline, setPlayerEntriesTimeline] = useState(null);
+    //const [playerEntriesTimeline, setPlayerEntriesTimeline] = useState(null); // (not used directly, kept for future)
     const attemptChartRef = React.useRef(null);
     // --- Gender Demographics Chart Ref ---
     const genderChartRef = React.useRef(null);
@@ -130,13 +130,13 @@ function Dashboard() {
         const female = playerGenderCounts.female ?? stats.femaleCount ?? 0;
         const male = playerGenderCounts.male ?? stats.maleCount ?? 0;
         return ({
-            labels: ['Female', 'Male'],
+            labels: ['Female', 'Male', 'LGBTQ+'],
             datasets: [{
-                data: [female, male],
-                backgroundColor: ['#FF69B4', '#4169E1']
+                data: [female, male, playerGenderCounts.unknown ?? stats.unknownCount ?? 0],
+                backgroundColor: ['#FF69B4', '#4169E1', '#f712e4ff']
             }]
         });
-    }, [playerGenderCounts, stats.femaleCount, stats.maleCount]);
+    }, [playerGenderCounts, stats.femaleCount, stats.maleCount, stats.unknownCount]);
 
     // Memoize the age chart data
     // Age chart uses grouped age buckets derived from `profiles` when available.
@@ -350,18 +350,18 @@ function Dashboard() {
         downloadCSV(csvContent, 'grouped_attempts_by_table.csv');
     };
 
-    // Download raw attempt scores as CSV (all user scores per attempt per table)
+    // Download raw attempts as CSV (user attempts per table with username)
     const downloadGroupedAttemptsRawCSV = () => {
         if (!attemptRawData) return;
         let csvContent = 'data:text/csv;charset=utf-8,';
         // Header
-        csvContent += 'Table,User Name,Attempt 1,Attempt 2,Attempt 3,Attempt 4,Attempt 5+\n';
+        csvContent += 'Table,User ID,Username,initAttempt,retakeAttempt,current_attempt\n';
         attemptRawData.forEach(table => {
             table.rows.forEach(row => {
-                csvContent += `${table.label},${row.user_name || ''},${row.attempt1_score ?? ''},${row.attempt2_score ?? ''},${row.attempt3_score ?? ''},${row.attempt4_score ?? ''},${row.attempt5_score ?? ''}\n`;
+                csvContent += `${table.label},${row.user_id ?? ''},${row.username || ''},${row.initAttempt ?? ''},${row.retakeAttempt ?? ''},${row.current_attempt ?? ''}\n`;
             });
         });
-        downloadCSV(csvContent, 'grouped_attempts_raw_scores.csv');
+        downloadCSV(csvContent, 'grouped_attempts_raw.csv');
     };
 
     // Download chart as PNG
@@ -426,8 +426,9 @@ function Dashboard() {
             genderSheet.addRow(['Gender', 'Count']);
             genderSheet.addRow(['Female', stats.femaleCount]);
             genderSheet.addRow(['Male', stats.maleCount]);
+            genderSheet.addRow(['Unknown', stats.unknownCount || 0]);
             genderSheet.addRow([]);
-            genderSheet.addRow(['Total', stats.femaleCount + stats.maleCount]);
+            genderSheet.addRow(['Total', stats.femaleCount + stats.maleCount + (stats.unknownCount || 0)]);
 
             // Age sheet
             const ageSheet = workbook.addWorksheet('Age Demographics');
@@ -450,13 +451,20 @@ function Dashboard() {
                 });
             }
 
-            // Attempts raw sheet
+            // Attempts raw sheet aligned to status tables
             if (attemptRawData) {
                 const rawAttempts = workbook.addWorksheet('Attempts (Raw)');
-                rawAttempts.addRow(['Table', 'User Name', 'Attempt 1', 'Attempt 2', 'Attempt 3', 'Attempt 4', 'Attempt 5+']);
+                rawAttempts.addRow(['Table', 'User ID', 'Username', 'initAttempt', 'retakeAttempt', 'current_attempt']);
                 attemptRawData.forEach(table => {
                     table.rows.forEach(row => {
-                        rawAttempts.addRow([table.label, row.user_name || '', row.attempt1_score ?? '', row.attempt2_score ?? '', row.attempt3_score ?? '', row.attempt4_score ?? '', row.attempt5_score ?? '']);
+                        rawAttempts.addRow([
+                            table.label,
+                            row.user_id ?? '',
+                            row.username || '',
+                            row.initAttempt ?? '',
+                            row.retakeAttempt ?? '',
+                            row.current_attempt ?? ''
+                        ]);
                     });
                 });
             }
@@ -532,15 +540,29 @@ function Dashboard() {
             try {
                 // Query the player-side status tables specified in the request
                 const quizTables = [
-                    { name: 'bakery_status', label: 'Bakery Quiz' },
-                    { name: 'church_status', label: 'Church Quiz' },
                     { name: 'rizal_status', label: 'Rizal Quiz' },
-                    { name: 'tisa_status', label: 'Tisa Quiz' }
+                    { name: 'tisa_status', label: 'Tisa Quiz' },
+                    { name: 'tower_status', label: 'Tower Quiz' },
+                    { name: 'bakery_status', label: 'Bakery Quiz' },
+                    { name: 'church_status', label: 'Church Quiz' }
                 ];
+
+                // Fetch profiles to map user_id -> username
+                const profilesRes = await supabasePlayer
+                    .from('profiles')
+                    .select('id,username');
+                const profileMap = {};
+                (profilesRes.data || []).forEach(p => {
+                    if (p && p.id) profileMap[p.id] = p.username || '';
+                });
 
                 // Fetch all tables in parallel using the player client
                 const results = await Promise.all(
-                    quizTables.map(t => supabasePlayer.from(t.name).select('attempt_1,attempt_2,attempt_3,attempt_4,attempt_5'))
+                    quizTables.map(t =>
+                        supabasePlayer
+                            .from(t.name)
+                            .select('user_id, initAttempt, retakeAttempt, current_attempt')
+                    )
                 );
 
                 // Keep only valid tables (skip 404s)
@@ -560,9 +582,12 @@ function Dashboard() {
                 const rawData = [];
 
                 valid.forEach(({ table, res }, idx) => {
-                    const rows = res.data || [];
+                    const rows = (res.data || []).map(r => ({
+                        ...r,
+                        username: profileMap[r.user_id] || ''
+                    }));
                     // For each attempt column count truthy / numeric sum
-                    const attemptCols = ['attempt_1','attempt_2','attempt_3','attempt_4','attempt_5'];
+                    const attemptCols = ['initAttempt', 'retakeAttempt', 'current_attempt'];
                     const colCounts = attemptCols.map(col => {
                         // If numeric values present, sum them; otherwise count truthy entries
                         const numericVals = rows.map(r => {
@@ -798,9 +823,9 @@ function Dashboard() {
                                 <Dropdown.Item onClick={downloadAgeReport}>
                                     Age Demographics
                                 </Dropdown.Item>
-                                <Dropdown.Item onClick={downloadPasigologyTimeSeriesReport}>
+                                {/* <Dropdown.Item onClick={downloadPasigologyTimeSeriesReport}>
                                     PASIGology Entries Over Time
-                                </Dropdown.Item>
+                                </Dropdown.Item> */}
                                 <Dropdown.Item onClick={downloadGroupedAttemptsReport}>
                                     Grouped Attempts by Table
                                 </Dropdown.Item>
@@ -973,93 +998,23 @@ function Dashboard() {
                 </Col>
             </Row>
 
-            {/* PASIGology Time-Series Line Chart */}
-            <Row>
-                <Col md={12}>
-                    <Card className="mb-4">
-                        <Card.Body>
-                            <div className="d-flex justify-content-between align-items-center mb-3">
-                                <h5>PASIGology Entries Over Time</h5>
-                                {/* Filter controls for time range */}
-                                <div>
-                                    <Button
-                                        variant={lineRange === '7d' ? 'primary' : 'outline-primary'}
-                                        size="sm"
-                                        className="me-1"
-                                        onClick={() => setLineRange('7d')}
-                                    >
-                                        Last 7 Days
-                                    </Button>
-                                    <Button
-                                        variant={lineRange === '30d' ? 'primary' : 'outline-primary'}
-                                        size="sm"
-                                        className="me-1"
-                                        onClick={() => setLineRange('30d')}
-                                    >
-                                        Last 30 Days
-                                    </Button>
-                                    <Button
-                                        variant={lineRange === '6m' ? 'primary' : 'outline-primary'}
-                                        size="sm"
-                                        className="me-1"
-                                        onClick={() => setLineRange('6m')}
-                                    >
-                                        Last 6 Months
-                                    </Button>
-                                    <Button
-                                        variant={lineRange === '1y' ? 'primary' : 'outline-primary'}
-                                        size="sm"
-                                        onClick={() => setLineRange('1y')}
-                                    >
-                                        Last 1 Year
-                                    </Button>
-                                    <Button
-                                        variant="outline-primary"
-                                        size="sm"
-                                        className="ms-2"
-                                        onClick={downloadPasigologyTimeSeriesReport}
-                                    >
-                                        Download Report
-                                    </Button>
+            {/* PASIGology Time-Series Line Chart — commented out for future use */}
+            {false && (
+                <Row>
+                    <Col md={12}>
+                        <Card className="mb-4">
+                            <Card.Body>
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <h5>PASIGology Entries Over Time</h5>
                                 </div>
-                            </div>
-                            <div style={{ height: '350px' }}>
-                                {lineChartLoading ? (
-                                    <Alert variant="info">Loading PASIGology time-series data...</Alert>
-                                ) : lineChartError ? (
-                                    <Alert variant="danger">{lineChartError}</Alert>
-                                ) : lineChartData ? (
-                                    <Line
-                                        data={lineChartData}
-                                        options={{
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            animation: { duration: 800, easing: 'easeInOutQuart' },
-                                            plugins: {
-                                                legend: { display: true, position: 'top' },
-                                                tooltip: { enabled: true },
-                                                title: { display: true, text: 'PASIGology Entries per Day' }
-                                            },
-                                            scales: {
-                                                x: {
-                                                    title: { display: true, text: 'Date' },
-                                                    type: 'category',
-                                                    ticks: { autoSkip: true, maxTicksLimit: 14 }
-                                                },
-                                                y: {
-                                                    title: { display: true, text: 'Number of Entries' },
-                                                    beginAtZero: true,
-                                                    precision: 0
-                                                }
-                                            }
-                                        }}
-                                    />
-                                ) : null}
-                            </div>
-                        </Card.Body>
-                    </Card>
-                </Col>
-            </Row>
+                                <div style={{ height: '350px' }}>
+                                    <Alert variant="info">Time-series chart is disabled.</Alert>
+                                </div>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                </Row>
+            )}
         </div>
     );
 }
