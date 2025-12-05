@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
+<<<<<<< Updated upstream
 import { Card, Table, ProgressBar } from 'react-bootstrap';
 import { supabase } from '../../services/supabase';
 
+=======
+import { Card, Table, ProgressBar, Tabs, Tab } from 'react-bootstrap';
+import { supabase, supabasePlayer } from '../../services/supabase';
+import AchievementsTab from './AchievementsTab';
+import FeedbackTab from './FeedbackTab';
+//still in error here will fix the user progress first
+>>>>>>> Stashed changes
 function UserProgress() {
   const [users, setUsers] = useState([]);
 
@@ -106,10 +114,46 @@ function UserProgress() {
                         </div>
                       </td>
                     </tr>
+<<<<<<< Updated upstream
                   );
                 })}
               </tbody>
             </Table>
+=======
+                  </thead>
+                  <tbody>
+                    {users.map((user) => {
+                      // Debug the user data
+                      debugUserProgress(user);
+
+                      const progress = calculateProgress(user);
+                      return (
+                        <tr key={user.id ?? `${user.username || user.email || 'unknown'}-row`}>
+                          <td>{user.username || user.email || 'Unknown'}</td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <ProgressBar
+                                now={progress}
+                                variant={getProgressVariant(progress)}
+                                className="flex-grow-1 me-2"
+                                label={`${Math.round(progress)}%`}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </Tab>
+              <Tab eventKey="achievements" title="Achievements">
+                <AchievementsTab users={users} />
+              </Tab>
+              <Tab eventKey="feedback" title="Feedback">
+                <FeedbackTab />
+              </Tab>
+            </Tabs>
+>>>>>>> Stashed changes
           )}
         </Card.Body>
       </Card>
