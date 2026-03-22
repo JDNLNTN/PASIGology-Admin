@@ -28,6 +28,7 @@ const Sidebar = () => {
         { path: '/quiz', label: 'Quiz', icon: '❓' },
         { path: '/userprogress', label: 'User Progress', icon: '📈' },
         { path: '/users', label: 'Users', icon: '👤' },
+        { path: '/announcement', label: 'Announcement', icon: '📢' },
     ];
 
     return (

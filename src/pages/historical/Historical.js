@@ -8,22 +8,20 @@ function Historical() {
   const { role: currentUserRole } = useAuth();
   const normalizedRole = (currentUserRole || '').trim().toLowerCase();
 
+  // Retain only the requested five items, with updated table names
   const historicalEvents = [
-    { name: 'Plaza Rizal', table: 'historical_plazarizal' },
-    { name: 'Dimas-alang Bakery', table: 'historical_dimasalangbakery' },
-    { name: 'City Hall', table: 'historical_cityhall' },
-    { name: 'Bahay na Tisa', table: 'historical_bahaynatisa' },
-    { name: 'Emmaculate Conception Church', table: 'historical_emmaculateconceptionchurch' },
-    { name: 'Pasig City Museum', table: 'historical_pasigcitymuseum' },
-    { name: 'Revolving Tower', table: 'historical_revolvingtower' },
-    { name: 'Pasig Palengke', table: 'historical_pasigpalengke' },
-    { name: 'Rainforest Park', table: 'historical_rainforestpark' },
-    { name: 'Arcovia', table: 'historical_arcovia' },
-    { name: 'The Pariancillo River or Bitukang Manok', table: 'historical_bitukangmanok' }
+    { name: 'Immaculate Conception Church', table: 'historical_church' },
+    { name: 'Plaza Rizal', table: 'historical_dimasalang' },
+    { name: 'Bahay na Tisa', table: 'historical_bnt' },
+    { name: 'Dimas-alang Bakery', table: 'historical_dimasalang' },
+    { name: 'Revolving Tower', table: 'historical_revolving' }
   ];
 
   const handleManage = (tableName) => {
-    navigate(`/historical/facts/${tableName}`);
+    // Pass column schema via route state (optional but robust)
+    navigate(`/historical/facts/${tableName}`, {
+      state: { columns: ['historical_facts', 'is_approved', 'status'] }
+    });
   };
 
   return (
