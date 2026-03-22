@@ -8,7 +8,10 @@ import { Card, Table, ProgressBar, Tabs, Tab } from 'react-bootstrap';
 import { supabase, supabasePlayer } from '../../services/supabase';
 import AchievementsTab from './AchievementsTab';
 import FeedbackTab from './FeedbackTab';
+<<<<<<< Updated upstream
 //still in error here will fix the user progress first
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 function UserProgress() {
   const [users, setUsers] = useState([]);
