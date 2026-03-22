@@ -1,5 +1,47 @@
-build/
-supabase/
-.env
+# Node / JS
 node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+dist/
+build/
+.cache/
+.next/
+.out/
+.eslintcache
+coverage/
+
+# Vite/Parcel/Webpack artifacts
+*.local
+*.cache
+*.tmp
+
+# Env/config
+.env
+.env.local
+.env.*.local
+
+# OS / IDE
 .DS_Store
+Thumbs.db
+.vscode/
+*.swp
+
+# Python (if applicable)
+__pycache__/
+*.pyc
+.venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# .NET (if applicable)
+bin/
+obj/
+*.user
+*.suo
+
+# Tests
+.junit/
+coverage/
