@@ -1,58 +1,24 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Spinner, Alert, Table } from 'react-bootstrap';
-import { supabase } from '../../../services/supabase';
+import React from 'react';
+import QuizInfoManager from '../../../components/QuizInfoManager';
 
 export default function DimasalangManage() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      const { data, error } = await supabase
-        .from('quiz_dimasalang')
-        .select('*')
-        .order('id', { ascending: true });
-      if (error) setError(error.message);
-      setRows(data || []);
-      setLoading(false);
-    };
-    load();
-  }, []);
-
   return (
-    <div className="p-4">
-      <Card className="shadow-sm">
-        <Card.Body>
-          <h2 className="mb-3">Dimas-alang Bakery Quiz</h2>
-          {loading && (
-            <div className="text-center my-4"><Spinner animation="border" /> Loading...</div>
-          )}
-          {error && <Alert variant="danger">{error}</Alert>}
-          {!loading && !error && (
-            rows.length === 0 ? (
-              <Alert variant="info">No entries found in table <b>quiz_dimasalang</b>.</Alert>
-            ) : (
-              <Table striped bordered hover responsive className="align-middle">
-                <thead className="table-light">
-                  <tr>
-                    {Object.keys(rows[0] || {}).map((k) => <th key={k}>{k}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i}>
-                      {Object.keys(rows[0] || {}).map((k) => <td key={k}>{String(r[k])}</td>)}
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            )
-          )}
-        </Card.Body>
-      </Card>
-    </div>
+    <QuizInfoManager
+      table="quiz_dimasalang"
+      title="Dimas-alang Bakery Quiz"
+      textField="question"
+      textLabel="Question"
+      newTextPlaceholder="New question..."
+      idField="id"
+      sequenceField={null}
+      statusField="status"
+      approveField="is_approved"
+      implementedField="is_implemented"
+      // Optional if your columns differ from defaults:
+      // incorrect1Field="incorrect1"
+      // incorrect2Field="incorrect2"
+      // incorrect3Field="incorrect3"
+      // correctAnswerField="correct_answer"
+    />
   );
 }

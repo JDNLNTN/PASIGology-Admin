@@ -42,7 +42,8 @@ if (typeof window !== 'undefined' && window.__supabase_client) {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true
-        }
+        },
+        db: { schema: 'public' }
     });
     if (typeof window !== 'undefined') window.__supabase_client = _supabaseClient;
 }
@@ -71,7 +72,8 @@ if (typeof window !== 'undefined' && window.__supabase_player_client) {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true
-        }
+        },
+        db: { schema: 'public' }
     });
     if (typeof window !== 'undefined') window.__supabase_player_client = _supabasePlayerClient;
 }
@@ -112,7 +114,8 @@ export function getOrCreateSupabaseClient({ url, anonKey }) {
                 persistSession: true,
                 autoRefreshToken: true,
                 detectSessionInUrl: true
-            }
+            },
+            db: { schema: 'public' }
         });
         if (typeof window !== 'undefined') window.__supabase_clients = _supabaseClients;
     }
@@ -161,7 +164,8 @@ export const getSupabaseAdminClient = () => {
             auth: {
                 persistSession: false,
                 autoRefreshToken: false
-            }
+            },
+            db: { schema: 'public' }
         });
     }
     return supabaseAdminInstance;
@@ -174,6 +178,24 @@ const initializeConnections = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
             console.log('Active session found:', session.user.email);
+        }
+
+        // Dev-only: ping announcements visibility to catch 404/privilege issues early
+        try {
+            const isDev = (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production');
+            if (typeof window !== 'undefined' && isDev) {
+                const { error, status } = await supabase
+                    .from('announcements')
+                    .select('id', { count: 'exact', head: true })
+                    .limit(1);
+                if (error) {
+                    console.warn('Announcements visibility issue:', { status, error });
+                } else {
+                    console.log('Announcements relation visible');
+                }
+            }
+        } catch (err) {
+            console.warn('Announcements ping failed:', err && err.message ? err.message : err);
         }
 
         // Test admin connection only on server-side where the service role key

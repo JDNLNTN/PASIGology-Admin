@@ -33,6 +33,7 @@ import PlazaRizalManage from './pages/quiz/manage/PlazaRizalManage';
 import BahayNaTisaManage from './pages/quiz/manage/BahayNaTisaManage';
 import DimasalangManage from './pages/quiz/manage/DimasalangManage';
 import RevolvingTowerManage from './pages/quiz/manage/RevolvingTowerManage';
+import Announcement from './pages/announcement/Announcement';
 
 function App() {
   return (
@@ -66,6 +67,7 @@ function App() {
                       <Route path="/quiz/stats/:tableName" element={<QuizStats />} />
                       <Route path="/userprogress" element={<UserProgress />} />
                       <Route path="/users" element={<Users />} />
+                      <Route path="/announcement" element={<Announcement />} />
                       <Route path="/dialogue/introduction-gallery" element={<IntroductionGallery />} />
                       <Route path="/dialogue/emmaculate-conception-church" element={<EmmaculateConceptionChurchOverview />} />
                       <Route path="/dialogue/emmaculate-conception-church-gallery" element={<EmmaculateConceptionChurchGallery />} />

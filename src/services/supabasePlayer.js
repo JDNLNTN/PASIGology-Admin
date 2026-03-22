@@ -46,7 +46,8 @@ export const fetchProfiles = async (opts = {}) => {
         'user_profiles',
         'players',
         'player_profiles',
-        'PASIGology'
+        'PASIGology',
+        'announcements'
     ];
 
     // Build the ordered list of tables to try.

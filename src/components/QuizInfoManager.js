@@ -17,6 +17,10 @@ export default function GalleryInfoManager({
   statusField = 'status',
   approveField = 'is_approved',
   implementedField = 'is_implemented',
+  incorrect1Field = 'incorrect_answer_one',
+  incorrect2Field = 'incorrect_answer_two',
+  incorrect3Field = 'incorrect_answer_three',
+  correctAnswerField = 'correct_answer',
 }) {
   const { role } = useAuth();
 
@@ -115,6 +119,10 @@ export default function GalleryInfoManager({
     const nextSeq = (rows?.length || 0) + 1;
     const newRow = {
       [textField]: newTextPlaceholder,
+      [incorrect1Field]: '',
+      [incorrect2Field]: '',
+      [incorrect3Field]: '',
+      [correctAnswerField]: '',
     };
     if (statusField) newRow[statusField] = 'pending';
     if (approveField) newRow[approveField] = false;
@@ -133,11 +141,37 @@ export default function GalleryInfoManager({
   const handleEdit = async (id) => {
     if (!canEdit) return;
     const target = rows.find((r) => r[idField] === id);
-    const current = target?.[textField] ?? '';
-    const text = window.prompt(`Edit ${textLabel.toLowerCase()}:`, current);
-    if (text === null) return;
+
+    const currentQuestion = target?.[textField] ?? '';
+    const nextQuestion = window.prompt(`Edit ${textLabel.toLowerCase()}:`, currentQuestion);
+    if (nextQuestion === null) return;
+
+    const currentIncorrect1 = target?.[incorrect1Field] ?? '';
+    const nextIncorrect1 = window.prompt('Edit incorrect answer 1:', currentIncorrect1);
+    if (nextIncorrect1 === null) return;
+
+    const currentIncorrect2 = target?.[incorrect2Field] ?? '';
+    const nextIncorrect2 = window.prompt('Edit incorrect answer 2:', currentIncorrect2);
+    if (nextIncorrect2 === null) return;
+
+    const currentIncorrect3 = target?.[incorrect3Field] ?? '';
+    const nextIncorrect3 = window.prompt('Edit incorrect answer 3:', currentIncorrect3);
+    if (nextIncorrect3 === null) return;
+
+    const currentCorrect = target?.[correctAnswerField] ?? '';
+    const nextCorrect = window.prompt('Edit correct answer:', currentCorrect);
+    if (nextCorrect === null) return;
+
+    const updatePayload = {
+      [textField]: nextQuestion,
+      [incorrect1Field]: nextIncorrect1,
+      [incorrect2Field]: nextIncorrect2,
+      [incorrect3Field]: nextIncorrect3,
+      [correctAnswerField]: nextCorrect,
+    };
+
     setSaving(true);
-    const { data, error } = await supabase.from(table).update({ [textField]: text }).eq(idField, id).select('*').single();
+    const { data, error } = await supabase.from(table).update(updatePayload).eq(idField, id).select('*').single();
     setSaving(false);
     if (error) {
       setError(error.message);
@@ -244,8 +278,11 @@ export default function GalleryInfoManager({
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={thStyle}>Sequence</th>
                 <th style={thStyle}>{textLabel}</th>
+                <th style={thStyle}>Incorrect 1</th>
+                <th style={thStyle}>Incorrect 2</th>
+                <th style={thStyle}>Incorrect 3</th>
+                <th style={thStyle}>Correct Answer</th>
                 <th style={thStyle}>Status</th>
                 <th style={thStyle}>Actions</th>
               </tr>
@@ -254,16 +291,13 @@ export default function GalleryInfoManager({
               {orderedRows.map((row) => (
                 <tr
                   key={row[idField]}
-                  draggable={canEdit && !!sequenceField}
-                  onDragStart={(e) => canEdit && !!sequenceField && onDragStart(e, row[idField])}
-                  onDragOver={(e) => canEdit && !!sequenceField && onDragOver(e)}
-                  onDrop={(e) => canEdit && !!sequenceField && onDrop(e, row[idField])}
                   style={trStyle}
                 >
-                  <td style={tdStyle}>
-                    <span style={{ cursor: !canEdit || !sequenceField ? 'default' : 'grab' }}>⋮⋮</span> {sequenceField ? (row[sequenceField] ?? '-') : '-'}
-                  </td>
                   <td style={tdStyle}>{row[textField]}</td>
+                  <td style={tdStyle}>{row[incorrect1Field] ?? '-'}</td>
+                  <td style={tdStyle}>{row[incorrect2Field] ?? '-'}</td>
+                  <td style={tdStyle}>{row[incorrect3Field] ?? '-'}</td>
+                  <td style={tdStyle}>{row[correctAnswerField] ?? '-'}</td>
                   <td style={tdStyle}>
                     {statusField ? row[statusField] : '-'}
                     {approveField && row[approveField] && <span style={{ marginLeft: 8, color: 'green' }} title="Approved">✔</span>}
@@ -274,7 +308,7 @@ export default function GalleryInfoManager({
                     {!approveField || row[approveField] ? (
                       isSuperAdmin && (
                         <button onClick={() => handleImplementedToggle(row[idField])} disabled={saving || !implementedField}>
-                        {implementedField && row[implementedField] ? 'Mark Not Implemented' : 'Mark Implemented'}
+                          {implementedField && row[implementedField] ? 'Mark Not Implemented' : 'Mark Implemented'}
                         </button>
                       )
                     ) : (
