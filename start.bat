@@ -2,9 +2,14 @@
 setlocal
 cd /d "%~dp0"
 title PASIGology Admin Panel
+set "NODE_DIR=%ProgramFiles%\nodejs"
+set "PATH=%NODE_DIR%;%PATH%"
 
-where node >nul 2>&1
-if not errorlevel 1 goto node_ready
+echo PASIGology Admin Panel launcher
+echo Project folder: %CD%
+echo.
+
+if exist "%NODE_DIR%\node.exe" goto node_ready
 
 echo Node.js is not installed. Installing the Node.js LTS release...
 where winget >nul 2>&1
@@ -23,21 +28,17 @@ if errorlevel 1 (
 	exit /b 1
 )
 
-set "PATH=C:\Program Files\nodejs;%PATH%"
-
 :node_ready
-set "PATH=C:\Program Files\nodejs;%PATH%"
-where npm >nul 2>&1
-if errorlevel 1 (
+	if not exist "%NODE_DIR%\npm.cmd" (
 	echo npm was not found. Close and reopen this file after installing Node.js.
 	pause
 	exit /b 1
 )
 
-if exist node_modules\ (goto dependencies_ready)
+	if exist node_modules\ goto dependencies_ready
 
 echo Installing project dependencies. This may take a few minutes...
-call npm ci
+	call "%NODE_DIR%\npm.cmd" ci
 if errorlevel 1 (
 	echo.
 	echo Dependency installation failed. Check your internet connection and try again.
@@ -47,5 +48,9 @@ if errorlevel 1 (
 
 :dependencies_ready
 echo Starting the admin panel at http://localhost:3000
-call npm start
+	call "%NODE_DIR%\npm.cmd" start
+	if errorlevel 1 (
+		echo.
+		echo The admin panel stopped unexpectedly. Review the error above and try again.
+	)
 pause
