@@ -310,7 +310,7 @@ function Administrators() {
     }
 
     return (
-        <div className="container-fluid">
+        <div className="container-fluid administrators">
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>Administrators</h2>
                         <div className="admin-name">
@@ -326,8 +326,9 @@ function Administrators() {
                     </button>
                 )}
             </div>
-
-            <ToastContainer position="top-end" className="p-3" style={{ zIndex: 1 }}>
+                
+            {/* Toast container styling/position: centers toasts at the top of the page (top-center) and ensures it sits above content */}
+            <ToastContainer position="top-center" className="p-3 d-flex justify-content-center" style={{ zIndex: 1050 }}>
                 <Toast onClose={() => setShowToast(false)} show={showToast} delay={3000} autohide bg={toastVariant}>
                     <Toast.Header>
                         <strong className="me-auto">Notification</strong>

@@ -7,9 +7,16 @@ import HistoricalManage from './HistoricalManage';
 function HistoricalFactsManage() {
   const { tableName } = useParams();
   const navigate = useNavigate();
+  // If someone navigates to /historical/facts without the tableName param,
+  // redirect back to the /historical index to avoid showing an error page.
+  useEffect(() => {
+    if (!tableName) {
+      navigate('/historical');
+    }
+  }, [tableName, navigate]);
   const [facts, setFacts] = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const [currentFact, setCurrentFact] = useState({ id: null, fact: '' });
+  const [currentFact, setCurrentFact] = useState({ id: null, historical_facts: '' });
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,7 +61,7 @@ function HistoricalFactsManage() {
       setError(null);
       const { data, error: fetchError } = await supabase
         .from(tableName)
-        .select('*, is_approved') // Assuming 'is_approved' column exists
+        .select('id, historical_facts, is_approved, status')
         .order('id', { ascending: true });
 
       if (fetchError) throw fetchError;
@@ -73,7 +80,7 @@ function HistoricalFactsManage() {
   }, [fetchCurrentUserRole, fetchFacts]);
 
   const handleAdd = () => {
-    setCurrentFact({ id: null, fact: '' });
+    setCurrentFact({ id: null, historical_facts: '' });
     setIsEditing(false);
     setShowModal(true);
     setError(null);
@@ -94,12 +101,12 @@ function HistoricalFactsManage() {
     try {
       setError(null);
       console.log('Attempting to save fact.');
-      if (!currentFact.fact.trim()) {
+      if (!currentFact.historical_facts?.trim()) {
         setError('Historical fact cannot be empty.');
         return;
       }
 
-      const factData = { fact: currentFact.fact.trim() };
+      const factData = { historical_facts: currentFact.historical_facts.trim() };
       if (currentUserRole === 'super_admin') {
         factData.is_approved = true; // Super admin adds approved facts directly
       }
@@ -249,7 +256,7 @@ function HistoricalFactsManage() {
               ) : (
                 facts.map((fact) => (
                   <tr key={fact.id}>
-                    <td>{fact.fact}</td>
+                    <td>{fact.historical_facts}</td>
                     <td>{fact.is_approved ? 'Approved' : 'Pending Approval'}</td>
                     <td>
                       <>
@@ -302,8 +309,8 @@ function HistoricalFactsManage() {
             <Form.Control
               as="textarea"
               rows={3}
-              value={currentFact.fact}
-              onChange={(e) => setCurrentFact({ ...currentFact, fact: e.target.value })}
+              value={currentFact.historical_facts}
+              onChange={(e) => setCurrentFact({ ...currentFact, historical_facts: e.target.value })}
               placeholder="Enter historical fact"
             />
           </Form.Group>

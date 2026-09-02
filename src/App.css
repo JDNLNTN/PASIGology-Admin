@@ -90,6 +90,12 @@ main {
 .app {
     min-height: 100vh;
     background-color: #f8f9fa;
+
+/* Satisfactory badge custom color since react-bootstrap lacks brown */
+.bg-brown {
+  background-color: #8B4513 !important;
+  color: #fff !important;
+}
 }
 
 .content-wrapper {

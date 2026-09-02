@@ -6,9 +6,15 @@ module.exports = {
   entry: './src/index.js',
   output: {
     path: path.resolve(__dirname, 'build'),
-    filename: 'bundle.js',
-    publicPath: '/PASIGology-Admin/'
+  filename: 'static/js/[name].[contenthash].js',
+  chunkFilename: 'static/js/[name].[contenthash].chunk.js',
+  clean: true,
+  // Use a production-friendly relative publicPath for static hosts (gh-pages)
+  // but use an absolute path for the dev server so assets load correctly.
+  publicPath: process.env.NODE_ENV === 'production' ? './' : '/'
   },
+  // Dev-friendly source maps (production will use full source-map)
+  devtool: process.env.NODE_ENV === 'production' ? 'source-map' : 'eval-cheap-module-source-map',
   module: {
     rules: [
       {
@@ -49,6 +55,14 @@ module.exports = {
         { from: /^\//, to: '/index.html' }
       ]
     },
+    proxy: [
+      {
+        context: ['/api'],
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        logLevel: 'debug'
+      }
+    ],
     static: {
       directory: path.join(__dirname, 'public'),
       serveIndex: false

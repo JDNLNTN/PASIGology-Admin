@@ -3,16 +3,31 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Table, Button, Modal, Form } from 'react-bootstrap';
 import { supabase } from '../../services/supabase';
 
+// HistoricalManage
+// This component provides a small admin UI to manage historical facts for a
+// specific table. The table name is pulled from the URL params (example:
+// /historical/manage/schema.table_name). The component supports:
+// - listing facts (select *)
+// - adding new facts (insert)
+// - editing existing facts (update)
+// - deleting facts (delete)
+// - approving facts (update is_approved)
+// Notes:
+// - The component uses the client-side Supabase anon key. Ensure RLS and
+//   policies allow the current role to perform the operations in development.
+// - The code assumes each record has `id`, `fact`, and `is_approved` fields.
+
 function HistoricalManage() {
   const { tableName } = useParams();
   const navigate = useNavigate();
-  const [facts, setFacts] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [currentFact, setCurrentFact] = useState({ id: null, fact: '' });
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [currentUserRole, setCurrentUserRole] = useState(null);
+  // UI + data state
+  const [facts, setFacts] = useState([]); // list of fact rows from the DB
+  const [showModal, setShowModal] = useState(false); // modal visibility
+  const [currentFact, setCurrentFact] = useState({ id: null, fact: '' }); // editing/adding target
+  const [isEditing, setIsEditing] = useState(false); // whether modal is edit mode
+  const [error, setError] = useState(null); // user-visible errors
+  const [loading, setLoading] = useState(true); // initial loading spinner
+  const [currentUserRole, setCurrentUserRole] = useState(null); // used to gate actions
 
   useEffect(() => {
     if (!tableName) {
@@ -20,8 +35,10 @@ function HistoricalManage() {
       setLoading(false);
       return;
     }
-    fetchFacts();
-    fetchCurrentUserRole();
+  // Load facts for the current table and determine the current user's role
+  // (role is used to show/hide admin actions like Edit/Approve/Delete).
+  fetchFacts();
+  fetchCurrentUserRole();
   }, [tableName]);
 
   const fetchFacts = async () => {
@@ -55,6 +72,12 @@ function HistoricalManage() {
     }
   };
 
+  // fetchFacts explanation:
+  // - Reads all rows using `select('*')` from the table name provided in the
+  //   route. The route must include a fully-qualified identifier (schema.table)
+  //   if your DB requires it. If the fetch fails, the error is displayed above
+  //   the table and logged to the console for debugging.
+
   const fetchCurrentUserRole = async () => {
     try {
       const { data } = await supabase.auth.getUser();
@@ -65,6 +88,11 @@ function HistoricalManage() {
     }
   };
 
+  // fetchCurrentUserRole explanation:
+  // - Uses the Supabase auth client to retrieve the current user's metadata.
+  // - This assumes the `user_metadata` contains a `role` property. If your
+  //   authentication flow stores role information elsewhere, update this.
+
   const handleAdd = () => {
     setCurrentFact({ id: null, fact: '' });
     setIsEditing(false);
@@ -72,12 +100,19 @@ function HistoricalManage() {
     setError(null);
   };
 
+  // handleAdd explanation:
+  // - Prepares the modal for inserting a new fact by clearing `currentFact`.
+
   const handleEdit = (fact) => {
     setCurrentFact(fact);
     setIsEditing(true);
     setShowModal(true);
     setError(null);
   };
+
+  // handleEdit explanation:
+  // - Puts the selected fact into edit-mode and opens the modal so the user
+  //   can update the text. The `currentFact` object is bound to the textarea.
 
   const handleDelete = async (id) => {
     if (!tableName) {
@@ -104,6 +139,11 @@ function HistoricalManage() {
       }
     }
   };
+
+  // handleDelete explanation:
+  // - Confirms with the user, then issues a DELETE where id = provided id.
+  // - On success it refreshes the list. Permission/RLS failures will be
+  //   surfaced as errors that you can inspect in the console or the alert.
 
   const handleSave = async () => {
     if (!tableName) {
@@ -161,6 +201,12 @@ function HistoricalManage() {
     }
   };
 
+  // handleSave explanation:
+  // - Validates input, constructs a minimal payload (currently only `fact`)
+  // - For edits it runs an update where id = currentFact.id, and for new
+  //   facts it inserts a single row. Both paths call `.select()` so the
+  //   server returns the new/updated rows (useful for debugging).
+
   const handleApprove = async (id) => {
     if (!tableName) {
       setError('No table name specified.');
@@ -184,6 +230,11 @@ function HistoricalManage() {
       setError(`Error approving fact: ${error.message}`);
     }
   };
+
+  // handleApprove explanation:
+  // - Marks the `is_approved` column true for the given id. UI shows the
+  //   Approve button only for users with `super_admin` role and when the fact
+  //   is currently not approved.
 
   if (loading) {
     return (

@@ -3,7 +3,6 @@ import { Card, Table, ProgressBar, Tabs, Tab } from 'react-bootstrap';
 import { supabase, supabasePlayer } from '../../services/supabase';
 import AchievementsTab from './AchievementsTab';
 import FeedbackTab from './FeedbackTab';
-//still in error here will fix the user progress first
 function UserProgress() {
   const [users, setUsers] = useState([]);
 
